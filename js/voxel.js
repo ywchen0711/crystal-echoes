@@ -374,16 +374,17 @@ export class VoxelPerson {
     if (!this.battle) {
       const ph = this.phase * Math.PI * 2 * 1.5, sw = Math.sin(ph);
       if (this.moving) { tg.legL = sw * 0.75; tg.legR = -sw * 0.75; tg.armL = -sw * 0.6; tg.armR = sw * 0.6 - 0.15; tg.armLz = 0.1; tg.armRz = -0.1; tg.torso = 0.08; tg.y = Math.abs(Math.cos(ph)) * 1.0; }
-      else { tg.legL = 0; tg.legR = 0; tg.armL = 0.05; tg.armR = -0.15; tg.armLz = 0.1; tg.armRz = -0.1; tg.torso = 0; tg.y = 0; tg.head = Math.sin(this.t * 1.3) * 0.03; }
+      else { tg.legL = 0; tg.legR = 0; tg.armL = 0.05; tg.armR = -0.15; tg.armLz = 0.1; tg.armRz = -0.1; tg.torso = 0; tg.y = 0; tg.head = 0; }
     }
-    for (const j of JOINTS) this.cur[j] += ((tg[j] || 0) - this.cur[j]) * k;
-    const c = this.cur, breathe = Math.sin(this.t * 2.6) * 0.03;
+    for (const j of JOINTS) { const d = (tg[j] || 0) - this.cur[j]; this.cur[j] = Math.abs(d) < 0.002 ? (tg[j] || 0) : this.cur[j] + d * k; }
+    if (Math.abs(this.angT - this.ang) < 0.002) this.ang = this.angT;
+    const c = this.cur, breathe = 0;
     this.legL.rotation.x = c.legL; this.legR.rotation.x = c.legR;
     this.armL.rotation.x = c.armL + breathe * 0.5; this.armR.rotation.x = c.armR - breathe * 0.5;
     this.armL.rotation.z = c.armLz + breathe * 0.3; this.armR.rotation.z = c.armRz - breathe * 0.3;
     this.torso.rotation.x = c.torso; this.torso.position.y = LEG + 0.5 + c.y + breathe * 4;
     this.head.rotation.x = c.head;
-    if (this.cape) this.cape.rotation.x = 0.12 + (this.moving ? 0.35 + Math.sin(this.t * 9) * 0.06 : Math.sin(this.t * 1.7) * 0.04) + Math.max(0, -c.torso) * 0.5;
+    if (this.cape) this.cape.rotation.x = 0.12 + (this.moving ? 0.35 + Math.sin(this.t * 9) * 0.06 : 0) + Math.max(0, -c.torso) * 0.5;
     if (this.battle && this.frame === BWIN) { this.body.position.y = Math.abs(Math.sin(this.t * 6)) * 0.12; }
     else this.body.position.y = 0;
     // knocked out: lie on the back

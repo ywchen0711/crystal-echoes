@@ -260,7 +260,8 @@ export class Field {
     if (this.def.interior) this.yaw = Math.max(-0.6, Math.min(0.6, this.yaw));
     this.yawCur += (this.yaw - this.yawCur) * Math.min(1, dt * 10);
     if (Math.abs(this.yawCur - (this.facedYaw ?? 0)) > 0.002) { this.facedYaw = this.yawCur; this.built.faceYaw?.(this.yawCur); for (const s of this.extraBillboards || []) s.mesh.rotation.set(s.mesh.rotation.x, this.yawCur, 0, 'YXZ'); }
-    this.cam.x += (p.x - this.cam.x) * k; this.cam.z += (p.z - this.cam.z) * k; this.cam.y += (p.y - this.cam.y) * k;
+    for (const a of ['x', 'y', 'z']) { const d = p[a] - this.cam[a]; this.cam[a] = Math.abs(d) < 0.003 ? p[a] : this.cam[a] + d * k; }
+    { const d = this.yaw - this.yawCur; if (Math.abs(d) < 0.001) this.yawCur = this.yaw; }
     const far = this.world ? (this.mount === 'airship' ? 1.5 : 1.15) : this.def.interior ? 0.85 : 1;
     const dist = (this.world ? 13.5 : 11.5) * far * (this.zoom || 1), pitch = this.world ? 0.82 : 0.68;
     const hd = Math.cos(pitch) * dist, sy = Math.sin(this.yawCur), cy = Math.cos(this.yawCur);
@@ -276,7 +277,7 @@ export class Field {
     const sorted = L.map(l => [l, (l.x - cx) ** 2 + (l.z - cz) ** 2]).sort((a, b) => a[1] - b[1]);
     for (let i = 0; i < this.pool.length; i++) {
       const pl = this.pool[i], e = sorted[i];
-      if (e && e[1] < 600) { const l = e[0]; pl.position.set(l.x, l.y, l.z); pl.color.set(l.color); pl.distance = l.dist; pl.intensity = l.intensity * (0.92 + Math.sin(this.t * 9 + i) * 0.04 + Math.sin(this.t * 23 + i * 3) * 0.04); }
+      if (e && e[1] < 600) { const l = e[0]; pl.position.set(l.x, l.y, l.z); pl.color.set(l.color); pl.distance = l.dist; pl.intensity = l.intensity * 0.92; }
       else pl.intensity = 0;
     }
   }

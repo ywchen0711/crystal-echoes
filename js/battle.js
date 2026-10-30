@@ -927,7 +927,7 @@ export class Battle {
     const fx = cur && cur.side !== 'summon' ? (cur.x + (cur.ox || 0)) * 0.15 : 0;
     const zoom = this.camZoom ? 0.8 : 1;
     const intro = this.camIntro ? 1.3 : 1;
-    this.camX = (this.camX ?? 0) + ((fx + Math.sin(this.t * 0.3) * 0.4) - (this.camX ?? 0)) * Math.min(1, dt * 3);
+    { const d = fx - (this.camX ?? 0); this.camX = Math.abs(d) < 0.002 ? fx : (this.camX ?? 0) + d * Math.min(1, dt * 3); }
     const shake = this.camShake > 0 ? (this.camShake -= dt, (Math.random() - 0.5) * this.camShake * 0.6) : 0;
     this.camera.position.set(this.camX + shake + 0.4, 5.2 * zoom * intro, 14.5 * zoom * intro);
     this.camera.lookAt(this.camX * 0.6, -0.2, 0);

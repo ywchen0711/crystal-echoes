@@ -35,6 +35,12 @@ class Game {
     document.body.classList.toggle('touchy', this.input.touchy);
     this.canvas.addEventListener('click', (e) => { if (this.tapHook) { const r = this.canvas.getBoundingClientRect(); this.tapHook(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); } });
     this.input.on((k) => this.fieldKey(k));
+    // drag on the scene (mouse, or the right side of a touch screen) to turn the camera
+    { let drag = null;
+      this.canvas.addEventListener('pointerdown', (e) => { if (this.mode === 'field') drag = { id: e.pointerId, x: e.clientX }; });
+      addEventListener('pointermove', (e) => { if (!drag || e.pointerId !== drag.id) return; const dx = e.clientX - drag.x; drag.x = e.clientX; if (this.mode === 'field' && !this.menuOpen) this.field.yaw -= dx * 0.009; });
+      const end = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
+      addEventListener('pointerup', end); addEventListener('pointercancel', end); }
     addEventListener('pointerdown', () => this.audio.init(), { once: false });
     addEventListener('keydown', () => this.audio.init());
     requestAnimationFrame((t) => this.loop(t));

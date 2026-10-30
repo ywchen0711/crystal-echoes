@@ -4,7 +4,7 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: var(--text); font-family: var(--font); user-select: none; -webkit-user-select: none; touch-action: none; }
-#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
 button { font-family: inherit; }
 
 /* ---------- panels ---------- */

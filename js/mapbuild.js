@@ -514,7 +514,7 @@ export function buildMap(scene, map, theme) {
     } else if (m.k === 'dungeon') {
       const st = std(tileTex(m.tile || 'stonewall', m.color || '#8a8478'));
       if (m.style === 'cave') { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9, 0), st); r.scale.set(1.2, 0.8, 1); r.position.y = 0.5; r.castShadow = true; g.add(r); const hole = new THREE.Mesh(new THREE.CircleGeometry(0.35, 10), new THREE.MeshBasicMaterial({ color: '#0a0610' })); hole.position.set(0, 0.35, 0.82); g.add(hole); }
-      else if (m.style === 'forest') { for (let i = 0; i < 5; i++) { const s = new Sprite(propPx('pine', { leaf: '#2a5a3a' }).canvas(), 1, { scale: 0.7 }); s.mesh.position.set((i - 2) * 0.35, 0, (i % 2) * 0.3 - 0.15); g.add(s.mesh); } }
+      else if (m.style === 'forest') { for (let i = 0; i < 5; i++) { const s = new Sprite(propPx('pine', { leaf: '#2a5a3a' }).canvas(), 1, { scale: 0.7 }); s.mesh.position.set((i - 2) * 0.35, 0, (i % 2) * 0.3 - 0.15); g.add(s.mesh); sprites.push(s); } }
       else { for (const dx of [-0.6, 0.6]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.4, 8), st); p.position.set(dx, 0.7, 0); p.castShadow = true; g.add(p); } const top = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.2, 0.4), st); top.position.y = 1.45; top.castShadow = true; g.add(top); if (m.style === 'sanctum') { const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.25, 0), new THREE.MeshStandardMaterial({ color: '#ffe8a0', emissive: '#ffc84a', emissiveIntensity: 1.2 })); cr.scale.y = 1.6; cr.position.y = 0.8; g.add(cr); anims.push((t) => { cr.rotation.y = t; }); } }
     }
     g.position.set(cx, c.h, cz); root.add(g);
@@ -522,6 +522,7 @@ export function buildMap(scene, map, theme) {
   }
 
   // instanced sprite props
+  const billboards = [];
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.18, 0, 0)), M = new THREE.Matrix4();
   for (const { kind, colors, list } of inst.values()) {
     const px = propPx(kind, colors), tex = texFrom(px.canvas());
@@ -531,10 +532,16 @@ export function buildMap(scene, map, theme) {
     const im = new THREE.InstancedMesh(g, mat, list.length);
     list.forEach(([x, y, z, sc], i) => { M.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sc, sc, sc)); im.setMatrixAt(i, M); });
     im.castShadow = true; im.customDepthMaterial = depthMat(tex);
-    root.add(im);
+    root.add(im); billboards.push({ im, list });
   }
+  // turn every flat sprite toward the camera's heading
+  const faceYaw = (yaw) => {
+    const qq = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.18, yaw, 0, 'YXZ'));
+    for (const { im, list } of billboards) { list.forEach(([x, y, z, sc], i) => { M.compose(new THREE.Vector3(x, y, z), qq, new THREE.Vector3(sc, sc, sc)); im.setMatrixAt(i, M); }); im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere?.(); }
+    for (const s of sprites) if (s.mesh.rotation.x !== 0 || s.lean !== false) s.mesh.rotation.set(s.mesh.rotation.x, yaw, 0, 'YXZ');
+  };
   // build batched meshes
   for (const k in batches) { const mesh = batches[k].mesh(mats[k]); if (mesh) root.add(mesh); }
   // invisible floor far below for the void
-  return { root, lights, interact, props, anims, sprites, windows, winMat };
+  return { root, lights, interact, props, anims, sprites, windows, winMat, faceYaw };
 }

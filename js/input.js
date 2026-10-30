@@ -23,6 +23,7 @@ export class Input {
     if (this.stick.id !== null) { x = this.stick.x; y = this.stick.y; }
     this.axis.x = x; this.axis.y = y;
     this.run = K.has('ShiftLeft') || K.has('ShiftRight') || this.stick.run;
+    this.turn = (K.has('KeyE') || K.has('PageDown') ? 1 : 0) - (K.has('KeyQ') || K.has('PageUp') ? 1 : 0);
     return this;
   }
   // on-screen stick + buttons

@@ -45,7 +45,7 @@ function bubbleTex(kind) {
 
 export class Field {
   constructor(game) {
-    this.G = game;
+    this.G = game; this.yaw = 0; this.yawCur = 0;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(32, 16 / 9, 0.1, 600);
     this.sun = new THREE.DirectionalLight('#fff', 2.5);
@@ -107,6 +107,7 @@ export class Field {
     for (const p of this.built.props) if (p.id === 'airship' && this.def.objs?.some(o => o.k === 'airship' && o.cond && !this.G.cond(o.cond))) p.mesh.visible = false;
     // player
     this.player = this.makeWalker(this.G.leaderLook());
+    this.facedYaw = 0;
     this.placePlayer(x, z, dir);
     this.mount = opts.mount || null;
     if (this.mount) this.applyMount();
@@ -160,7 +161,7 @@ export class Field {
     o.sprite = s; this.built.interact.push({ kind: 'tablet', c: this.map.at(o.x, o.z), id: o.id, sprite: s, x: o.x + 0.5, z: o.z + 0.5 });
   }
   addMogu(o) {
-    const spr = new Sprite(this.moguCanvas, 2, { scale: 1 }); spr.mesh.position.set(o.x + 0.5, groundAt(this.map, o.x + 0.5, o.z + 0.5), o.z + 0.5); this.built.root.add(spr.mesh);
+    const spr = new Sprite(this.moguCanvas, 2, { scale: 1 }); spr.mesh.position.set(o.x + 0.5, groundAt(this.map, o.x + 0.5, o.z + 0.5), o.z + 0.5); this.built.root.add(spr.mesh); this.built.sprites.push(spr); this.facedYaw = 0;
     this.built.interact.push({ kind: 'mogu', id: o.id, spr, x: o.x + 0.5, z: o.z + 0.5, c: this.map.at(o.x, o.z) });
     this.built.anims.push((t) => spr.setFrame(Math.floor(t * 3) % 2));
   }
@@ -192,6 +193,7 @@ export class Field {
 
   update(dt, input) {
     this.t += dt;
+    if (input.turn) this.yaw += input.turn * dt * 2.2;
     const p = this.player;
     let moved = false;
     if (!this.locked && p) {
@@ -199,6 +201,8 @@ export class Field {
       const len = Math.hypot(ix, iy);
       if (len > 0.15) {
         ix /= Math.max(1, len); iy /= Math.max(1, len);
+        // stick directions are relative to the camera's heading
+        { const cy = Math.cos(this.yawCur), sy = Math.sin(this.yawCur); [ix, iy] = [ix * cy + iy * sy, -ix * sy + iy * cy]; }
         const sp = (this.mount === 'airship' ? 9 : this.mount === 'bird' ? 7 : input.run ? 5.6 : 4.0) * dt;
         p.dir = Math.abs(ix) > Math.abs(iy) ? (ix > 0 ? 'right' : 'left') : (iy > 0 ? 'down' : 'up');
         p.ang = Math.atan2(ix, iy);
@@ -253,11 +257,15 @@ export class Field {
   cellKey(w) { return Math.floor(w.x) + ',' + Math.floor(w.z); }
   updateCamera(dt) {
     const p = this.player, k = 1 - Math.exp(-dt * 6);
+    if (this.def.interior) this.yaw = Math.max(-0.6, Math.min(0.6, this.yaw));
+    this.yawCur += (this.yaw - this.yawCur) * Math.min(1, dt * 10);
+    if (Math.abs(this.yawCur - (this.facedYaw ?? 0)) > 0.002) { this.facedYaw = this.yawCur; this.built.faceYaw?.(this.yawCur); for (const s of this.extraBillboards || []) s.mesh.rotation.set(s.mesh.rotation.x, this.yawCur, 0, 'YXZ'); }
     this.cam.x += (p.x - this.cam.x) * k; this.cam.z += (p.z - this.cam.z) * k; this.cam.y += (p.y - this.cam.y) * k;
     const far = this.world ? (this.mount === 'airship' ? 1.5 : 1.15) : this.def.interior ? 0.85 : 1;
     const dist = (this.world ? 13.5 : 11.5) * far * (this.zoom || 1), pitch = this.world ? 0.82 : 0.68;
-    this.camera.position.set(this.cam.x, this.cam.y + Math.sin(pitch) * dist + 0.8, this.cam.z + Math.cos(pitch) * dist);
-    this.camera.lookAt(this.cam.x, this.cam.y + 0.9, this.cam.z - 0.4);
+    const hd = Math.cos(pitch) * dist, sy = Math.sin(this.yawCur), cy = Math.cos(this.yawCur);
+    this.camera.position.set(this.cam.x + sy * hd, this.cam.y + Math.sin(pitch) * dist + 0.8, this.cam.z + cy * hd);
+    this.camera.lookAt(this.cam.x - sy * 0.4, this.cam.y + 0.9, this.cam.z - cy * 0.4);
     // sun and its shadow box follow the player
     this.sun.position.set(this.cam.x + this.sunDir.x * 30, this.cam.y + this.sunDir.y * 30, this.cam.z + this.sunDir.z * 30);
     this.sun.target.position.set(this.cam.x, this.cam.y, this.cam.z);

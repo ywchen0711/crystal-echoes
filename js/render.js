@@ -26,7 +26,7 @@ const TiltShift = {
     }`,
 };
 const Grade = {
-  uniforms: { tDiffuse: { value: null }, sat: { value: 1.12 }, contrast: { value: 1.06 }, tint: { value: new THREE.Vector3(1.02, 1.0, 0.96) }, vig: { value: 0.45 }, fade: { value: 0 }, flash: { value: 0 }, flashColor: { value: new THREE.Vector3(1, 1, 1) }, gray: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, sat: { value: 1.1 }, contrast: { value: 1.1 }, tint: { value: new THREE.Vector3(1.02, 1.0, 0.97) }, vig: { value: 0.6 }, fade: { value: 0 }, flash: { value: 0 }, flashColor: { value: new THREE.Vector3(1, 1, 1) }, gray: { value: 0 } },
   vertexShader: TiltShift.vertexShader,
   fragmentShader: `uniform sampler2D tDiffuse; uniform float sat, contrast, vig, fade, flash, gray; uniform vec3 tint, flashColor; varying vec2 vUv;
     void main(){
@@ -35,6 +35,9 @@ const Grade = {
       c.rgb = mix(vec3(l), c.rgb, sat * (1.0 - gray));
       c.rgb = (c.rgb - 0.5) * contrast + 0.5;
       c.rgb *= tint;
+      // split toning: cool shadows, warm highlights (the HD-2D storybook look)
+      float l2 = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb += mix(vec3(-0.015, 0.0, 0.045), vec3(0.035, 0.018, -0.025), smoothstep(0.15, 0.85, l2)) * (1.0 - gray);
       vec2 d = vUv - 0.5; c.rgb *= 1.0 - dot(d, d) * vig * 1.8;
       c.rgb = mix(c.rgb, flashColor, flash);
       c.rgb *= 1.0 - fade;

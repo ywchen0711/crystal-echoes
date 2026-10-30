@@ -2,7 +2,7 @@
 import * as THREE from '../lib/three.module.min.js';
 import { Sprite, Particles, skyDome, blobShadow } from './render.js';
 import { battleSheet, monsterPx, propPx, tileTex, texFrom, BPOSE } from './pixel.js';
-import { VoxelPerson, VoxelSprite } from './voxel.js';
+import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js';
 import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js';
 import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP } from './party.js';
 import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js';
@@ -1077,8 +1077,7 @@ class BattleUI {
   }
   async cutin(eid, name) {
     const E = ECHOES[eid];
-    const c = battleSheet(E.look); const crop = document.createElement('canvas'); crop.width = 20; crop.height = 32; crop.getContext('2d').drawImage(c, 20 * 4, 0, 20, 32, 0, 0, 20, 32);
-    this.cut.innerHTML = `<div class="cut-bg" style="--c:${E.color}"></div><img class="cut-img" src="${crop.toDataURL()}"><div class="cut-txt"><small>RESONANCE ・ ${E.name}</small><b>${name}</b></div>`;
+    this.cut.innerHTML = `<div class="cut-bg" style="--c:${E.color}"></div><img class="cut-img" src="${renderPortrait(E.look, 'battle')}"><div class="cut-txt"><small>RESONANCE ・ ${E.name}</small><b>${name}</b></div>`;
     this.cut.classList.add('on'); this.b.G.audio.sfx('resonance');
     this.b.flash(E.color, 0.5);
     await wait(1500); this.cut.classList.remove('on'); await wait(200);

@@ -4,6 +4,8 @@ import * as THREE from '../lib/three.module.min.js';
 import { shade, mix } from './pixel.js';
 
 const VS = 1.75 / 46; // world units per voxel (a person is about 46 voxels tall)
+const LEG = 17;       // leg length in voxels
+const HEAD = 0.8;     // heads are drawn finer and smaller than the body (less chibi)
 const SKINS = { light: '#f3c9a4', tan: '#d9a274', dark: '#9c6a48', pale: '#f6dccb', green: '#9cc79a', blue: '#9db3e0' };
 
 // ---------------------------------------------------------------- voxel grid + mesher
@@ -34,12 +36,12 @@ const FACES = [
 ];
 const colCache = new Map();
 function lin(hex) { let c = colCache.get(hex); if (!c) { c = new THREE.Color(hex); colCache.set(hex, c); } return c; }
-function meshGrid(g, noise = 0.035) {
+function meshGrid(g, noise = 0.035, ao = null) {
   const pos = [], nor = [], col = [], idx = [];
   for (const [x, y, z, hex] of g.m.values()) {
     const c = lin(hex);
     const h = ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) >>> 0;
-    const n = 1 + ((h % 9) - 4) / 4 * noise;
+    const n = (1 + ((h % 9) - 4) / 4 * noise) * (ao ? ao[2] + (1 - ao[2]) * Math.max(0, Math.min(1, (y - ao[0]) / (ao[1] - ao[0]))) : 1);
     for (const [N, U, V, k] of FACES) {
       if (g.has(x + N[0], y + N[1], z + N[2])) continue;
       const b = pos.length / 3, f = n * k;
@@ -63,7 +65,7 @@ function meshGrid(g, noise = 0.035) {
 // lit material whose glow takes each cube's own colour (so a flash brightens instead of turning grey)
 export function voxelMaterial(glow = 0.2) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, emissive: new THREE.Color(glow, glow, glow) });
-  m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance *= vColor.rgb;'); };
+  m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance *= vColor.rgb;\n\t{ float fr = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 2.5); totalEmissiveRadiance += vec3(0.42, 0.52, 0.78) * fr * 0.22 * (0.5 + vColor.g); }'); };
   return m;
 }
 
@@ -80,8 +82,8 @@ function partsFor(s) {
 
   // legs: pivot at the hip, the boot sole sits on the ground
   const leg = new VGrid();
-  leg.fill(-2, 2, -15, -1, -2, 2, (x, y, z) => !(Math.abs(x) === 2 && Math.abs(z) === 2), (x, y, z) => y >= -9 ? (y === -1 ? shade(L, -0.15) : L) : null);
-  leg.fill(-2, 2, -15, -10, -2, 3, (x, y, z) => !(Math.abs(x) === 2 && (z === 3 || z === -2)) && !(y >= -11 && z === 3), (x, y) => y === -15 ? shade(B, -0.35) : y === -10 ? shade(B, 0.18) : B);
+  leg.fill(-2, 2, -LEG, -1, -2, 2, (x, y, z) => !(Math.abs(x) === 2 && Math.abs(z) === 2), (x, y, z) => y >= -LEG + 6 ? (y === -1 ? shade(L, -0.15) : y === -LEG + 9 && z === 2 ? shade(L, 0.12) : L) : null);
+  leg.fill(-2, 2, -LEG, -LEG + 6, -2, 3, (x, y, z) => !(Math.abs(x) === 2 && (z === 3 || z === -2)) && !(y >= -LEG + 4 && z === 3), (x, y) => y === -LEG ? shade(B, -0.35) : y === -LEG + 6 ? shade(B, 0.18) : y === -LEG + 5 && s.top2 ? shade(B, -0.12) : B);
   P.leg = leg;
 
   // torso: hips to shoulders (local y 0..13)
@@ -98,12 +100,17 @@ function partsFor(s) {
     if (z === 3 && Math.abs(x) === 2 && y >= 4) return shade(T, -0.12);
     return y <= 1 ? shade(T, -0.1) : T;
   });
+  if (!s.robe) {
+    tor.fill(-7, 7, -4, 1, -4, 4, (x, y, z) => (Math.abs(z) === 4 && Math.abs(x) <= 5) || (Math.abs(x) === 6 && Math.abs(z) <= 3) ? !(z === 4 && x === 0 && y < 0) : false, (x, y, z) => y === -4 ? (s.top2 ? T2 : shade(T, -0.32)) : y >= 0 ? shade(T, -0.18) : shade(T, -0.06));
+    tor.box(6, 7, 0, 2, 1, 2, '#6a4a2a'); tor.set(7, 2, 1, '#e8c050');
+  }
+  if (s.top2) tor.fill(-6, 6, 12, 13, -3, 3, (x, y, z) => (Math.abs(x) >= 5 || Math.abs(z) === 3) && tor.has(x, y, z), shade(T2, 0.05));
   if (s.robe) {
-    for (let y = -13; y <= 1; y++) {
-      const t = (1 - y) / 14, hx = 6.6 + t * 2.4, hz = 3.8 + t * 2;
+    for (let y = -15; y <= 1; y++) {
+      const t = (1 - y) / 16, hx = 6.6 + t * 2.4, hz = 3.8 + t * 2;
       tor.fill(-9, 9, y, y, -6, 6, (x, _, z) => sq4(x / hx) + sq4(z / hz) <= 1, (x, _, z) => {
-        if (y <= -12) return shade(T, -0.3);
-        if (y === -11 && s.top2) return T2;
+        if (y <= -14) return shade(T, -0.3);
+        if (y === -13 && s.top2) return T2;
         if (z > 0 && Math.abs(x) <= 1 && s.top2) return T2;
         return y % 4 === 0 && Math.abs(x) % 4 === 1 ? shade(T, -0.1) : T;
       });
@@ -152,16 +159,16 @@ function partsFor(s) {
     const bang = (x) => style === 'spiky' ? (Math.abs(x) % 3 === 1 ? 7 : 9) : ([0, 1, 1, 0, 1, 0, 0, 1][((x % 8) + 8) % 8] ? 9 : 10);
     hd.fill(-10, 10, -2, 17, -10, 10, (x, y, z) => {
       if (rbox(x, y, z, 0, cy, 0, R, R, R)) return false;
-      if (!rbox(x, y, z, 0, cy + 0.4, -0.3, R + 1.7, R + 1.7, R + 1.7)) return false;
+      if (!rbox(x, y, z, 0, cy + 0.3, -0.3, R + 1.25, R + 1.25, R + 1.25)) return false;
       if (z >= 4) return y >= bang(x);
       if (Math.abs(x) >= 6 && z <= 3 && y >= sideMin) return true;
       if (z <= -1 && y >= backMin) return true;
       return y >= 8;
     }, (x, y, z) => y === 12 && z >= 2 && Math.abs(x) <= 5 ? HL : y <= sideMin + 1 ? HD : H);
     if (style === 'spiky') {
-      for (const [bx, bz, hgt, lean] of [[-4, 3, 4, -0.3], [1, 4, 5, 0.1], [5, 2, 4, 0.4], [-2, -2, 4, -0.2], [3, -3, 4, 0.2], [-6, -1, 3, -0.6], [7, -1, 3, 0.6]]) {
+      for (const [bx, bz, hgt, lean] of [[-4, 3, 3, -0.3], [1, 4, 4, 0.1], [5, 2, 3, 0.4], [-2, -2, 3, -0.2], [3, -3, 3, 0.2], [-6, -1, 2, -0.6], [7, -1, 2, 0.6]]) {
         for (let i = 0; i <= hgt; i++) {
-          const r = 2.6 * (1 - i / (hgt + 1)), cx = bx + lean * i, cz = bz - i * 1.1, yy = 14 + i;
+          const r = 2.2 * (1 - i / (hgt + 1)), cx = bx + lean * i, cz = bz - i * 1.1, yy = 13 + i;
           hd.fill(Math.floor(cx - 2), Math.ceil(cx + 2), yy, yy, Math.floor(cz - 2), Math.ceil(cz + 2), (x, _, z) => (x - cx) ** 2 + (z - cz) ** 2 <= r * r + 0.3, i > hgt - 2 ? HL : H);
         }
       }
@@ -215,7 +222,7 @@ function partsFor(s) {
   // cape: hangs from the shoulders behind the back
   if (s.cape) {
     const C = s.cape, cp = new VGrid();
-    for (let y = -23; y <= 0; y++) { const hw = 6 + Math.round((-y) / 9); cp.box(-hw, hw, y, y, -1, 0, (x, _, z) => y <= -22 ? shade(C, -0.3) : z === 0 ? shade(C, -0.25) : Math.abs(x) === hw ? shade(C, -0.12) : C); }
+    for (let y = -25; y <= 0; y++) { const hw = 6 + Math.round((-y) / 9); cp.box(-hw, hw, y, y, -1, 0, (x, _, z) => y <= -24 ? shade(C, -0.3) : z === 0 ? shade(C, -0.25) : Math.abs(x) === hw ? shade(C, -0.12) : C); }
     cp.box(-7, 7, 0, 1, -1, 2, (x, y) => y === 1 ? shade(C, 0.2) : C);
     cp.box(-1, 1, 0, 1, 3, 3, gold);
     P.cape = cp;
@@ -299,7 +306,7 @@ const geoCache = new Map();
 function geometriesFor(look) {
   const key = JSON.stringify(look);
   let G = geoCache.get(key);
-  if (!G) { const P = partsFor(look); G = {}; for (const k in P) G[k] = meshGrid(P[k]); geoCache.set(key, G); }
+  if (!G) { const P = partsFor(look); G = {}; const AO = { leg: [-LEG, -1, 0.72], torso: [-15, 13, 0.78], head: [-2, 14, 0.82], arm: [-11, 0, 0.8], cape: [-25, 1, 0.7] }; for (const k in P) G[k] = meshGrid(P[k], 0.035, AO[k]); geoCache.set(key, G); }
   return G;
 }
 
@@ -330,10 +337,10 @@ export class VoxelPerson {
     const part = (geo, parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); if (geo) { const m = new THREE.Mesh(geo, this.mat); m.castShadow = true; g.add(m); } parent.add(g); return g; };
     this.mesh = new THREE.Group();
     this.body = new THREE.Group(); this.body.scale.setScalar(VS * this.scale); this.mesh.add(this.body);
-    this.legL = part(G.leg, this.body, 3, 15.5, 0);
-    this.legR = part(G.leg, this.body, -3, 15.5, 0);
-    this.torso = part(G.torso, this.body, 0, 15.5, 0);
-    this.head = part(G.head, this.torso, 0, 13.5, 0);
+    this.legL = part(G.leg, this.body, 3, LEG + 0.5, 0);
+    this.legR = part(G.leg, this.body, -3, LEG + 0.5, 0);
+    this.torso = part(G.torso, this.body, 0, LEG + 0.5, 0);
+    this.head = part(G.head, this.torso, 0, 13.5, 0); this.head.scale.setScalar(HEAD);
     this.armL = part(G.arm, this.torso, 8, 12, 0);
     this.armR = part(G.arm, this.torso, -8, 12, 0);
     if (G.cape) this.cape = part(G.cape, this.torso, 0, 12.5, -4.5);
@@ -371,7 +378,7 @@ export class VoxelPerson {
     this.legL.rotation.x = c.legL; this.legR.rotation.x = c.legR;
     this.armL.rotation.x = c.armL + breathe * 0.5; this.armR.rotation.x = c.armR - breathe * 0.5;
     this.armL.rotation.z = c.armLz + breathe * 0.3; this.armR.rotation.z = c.armRz - breathe * 0.3;
-    this.torso.rotation.x = c.torso; this.torso.position.y = 15.5 + c.y + breathe * 4;
+    this.torso.rotation.x = c.torso; this.torso.position.y = LEG + 0.5 + c.y + breathe * 4;
     this.head.rotation.x = c.head;
     if (this.cape) this.cape.rotation.x = 0.12 + (this.moving ? 0.35 + Math.sin(this.t * 9) * 0.06 : Math.sin(this.t * 1.7) * 0.04) + Math.max(0, -c.torso) * 0.5;
     if (this.battle && this.frame === BWIN) { this.body.position.y = Math.abs(Math.sin(this.t * 6)) * 0.12; }
@@ -386,6 +393,37 @@ const BWIN = 8;
 
 // ---------------------------------------------------------------- monsters: the pixel art, puffed out into a rounded slab
 const slabCache = new Map();
+// ---------------------------------------------------------------- portraits rendered from the models (menus, dialogue, cut-ins)
+let PR = null;
+export function renderPortrait(look, mode = 'face') {
+  if (!look) return '';
+  const W = 160, H = mode === 'face' ? 144 : 256;
+  if (!PR) {
+    const canvas = document.createElement('canvas');
+    const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+    r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.1;
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight('#e4ecff', '#3a3050', 1.5));
+    const key = new THREE.DirectionalLight('#fff2dc', 2.8); key.position.set(2.5, 3, 4); scene.add(key);
+    const rim = new THREE.DirectionalLight('#9ab8ff', 2.4); rim.position.set(-3, 2.5, -3); scene.add(rim);
+    PR = { r, scene, cam: new THREE.PerspectiveCamera(22, 1, 0.1, 50) };
+  }
+  const { r, scene, cam } = PR;
+  r.setSize(W, H, false); cam.aspect = W / H; cam.updateProjectionMatrix();
+  const v = new VoxelPerson(look, { battle: mode === 'battle', angle: mode === 'battle' ? -0.55 : 0.3, glow: 0.08 });
+  if (mode === 'battle') v.setFrame(8);
+  for (let i = 0; i < 40; i++) v.tick(0.05);
+  v.t = 0; v.tick(0.0001);
+  scene.add(v.mesh);
+  const headY = (LEG + 0.5 + 13.5 + 6.5 * HEAD) * VS;
+  if (mode === 'face') { cam.position.set(0.25, headY + 0.08, 1.9); cam.lookAt(0, headY, 0); }
+  else { cam.position.set(0.5, 1.0, 6.0); cam.lookAt(0, 0.92, 0); }
+  r.render(scene, cam);
+  const url = r.domElement.toDataURL();
+  scene.remove(v.mesh); v.dispose();
+  return url;
+}
+
 export class VoxelSprite {
   constructor(px, opts = {}) {
     this.voxel = true;

@@ -6,20 +6,20 @@ import { ENEMIES } from './data.js';
 import { monsterPx } from './pixel.js';
 import { personSheet, battleSheet } from './pixel.js';
 import { lookOf } from './field.js';
+import { renderPortrait } from './voxel.js';
 
 const $ = (s) => document.querySelector(s);
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 const portraitCache = new Map();
 export function portrait(look) {
   const L = lookOf(look); if (!L) return '';
-  const key = JSON.stringify(L); if (portraitCache.has(key)) return portraitCache.get(key);
-  const sh = personSheet(L); const c = document.createElement('canvas'); c.width = 20; c.height = 18;
-  c.getContext('2d').drawImage(sh, 0, 0, 20, 18, 0, 0, 20, 18);
-  const url = c.toDataURL(); portraitCache.set(key, url); return url;
+  const key = 'p' + JSON.stringify(L); if (portraitCache.has(key)) return portraitCache.get(key);
+  const url = renderPortrait(L, 'face'); portraitCache.set(key, url); return url;
 }
 export function fullSprite(look, battle = false) {
-  const L = lookOf(look); const sh = battle ? battleSheet(L) : personSheet(L); const c = document.createElement('canvas'); c.width = 20; c.height = 32;
-  c.getContext('2d').drawImage(sh, 0, 0, 20, 32, 0, 0, 20, 32); return c.toDataURL();
+  const L = lookOf(look); if (!L) return '';
+  const key = (battle ? 'b' : 'f') + JSON.stringify(L); if (portraitCache.has(key)) return portraitCache.get(key);
+  const url = renderPortrait(L, battle ? 'battle' : 'full'); portraitCache.set(key, url); return url;
 }
 
 export class UI {
@@ -70,23 +70,32 @@ export class UI {
       this.layer.appendChild(wrap);
       let sel = Math.max(0, Math.min(items.length - 1, o.start || 0));
       if (items[sel]?.disabled && !o.allowDisabled) { const f = items.findIndex(i => !i.disabled); if (f >= 0) sel = f; }
-      const draw = () => {
-        const info = typeof o.info === 'function' ? o.info(sel) : (o.info || '');
-        wrap.innerHTML = `<div class="ch-box">${o.title ? `<div class="ch-title">${o.title}</div>` : ''}<div class="ch-cols"><div class="ch-list">${items.map((it, i) => `<div class="ch-it ${i === sel ? 'sel' : ''} ${it.disabled ? 'dis' : ''}" data-i="${i}">${it.icon ? `<img src="${it.icon}">` : ''}<span class="ch-l">${it.label}</span>${it.sub !== undefined ? `<span class="ch-s">${it.sub}</span>` : ''}</div>`).join('')}</div>${info ? `<div class="ch-info">${info}</div>` : ''}</div>${items[sel]?.desc ? `<div class="ch-desc">${items[sel].desc}</div>` : ''}${o.cancel !== false ? '<div class="ch-back">✕ 返回</div>' : ''}</div>`;
-        wrap.querySelectorAll('.ch-it').forEach(el => el.onclick = () => { const i = +el.dataset.i; if (items[i].disabled && !o.allowDisabled) { G.audio.sfx('error'); return; } if (i === sel || G.input.touchy) done(i); else { sel = i; G.audio.sfx('move'); draw(); } });
+      let built = false, lastInfo = null, rows = [], infoEl = null, descEl = null;
+      // the whole window is built once; moving the cursor only updates the highlight, info and description
+      const build = () => {
+        wrap.innerHTML = `<div class="ch-box${built ? ' noanim' : ''}">${o.title ? `<div class="ch-title">${o.title}</div>` : ''}<div class="ch-cols"><div class="ch-list">${items.map((it, i) => `<div class="ch-it ${it.disabled ? 'dis' : ''}" data-i="${i}">${it.icon ? `<img src="${it.icon}">` : ''}<span class="ch-l">${it.label}</span>${it.sub !== undefined ? `<span class="ch-s">${it.sub}</span>` : ''}</div>`).join('')}</div>${o.info ? '<div class="ch-info"></div>' : ''}</div><div class="ch-desc"></div>${o.cancel !== false ? '<div class="ch-back">✕ 返回</div>' : ''}</div>`;
+        built = true; lastInfo = null;
+        rows = [...wrap.querySelectorAll('.ch-it')]; infoEl = wrap.querySelector('.ch-info'); descEl = wrap.querySelector('.ch-desc');
+        rows.forEach(el => el.onclick = () => { const i = +el.dataset.i; if (items[i].disabled && !o.allowDisabled) { G.audio.sfx('error'); return; } if (i === sel || G.input.touchy) done(i); else { sel = i; G.audio.sfx('move'); update(); } });
         const b = wrap.querySelector('.ch-back'); if (b) b.onclick = () => done(-1);
-        const s = wrap.querySelector('.ch-it.sel'); if (s) s.scrollIntoView({ block: 'nearest' });
+        update();
+      };
+      const update = () => {
+        rows.forEach((el, i) => el.classList.toggle('sel', i === sel));
+        if (infoEl) { const info = typeof o.info === 'function' ? o.info(sel) : (o.info || ''); if (info !== lastInfo) { infoEl.innerHTML = info; lastInfo = info; } }
+        const d = items[sel]?.desc || ''; if (descEl.innerHTML !== d) descEl.innerHTML = d; descEl.style.display = d ? '' : 'none';
+        rows[sel]?.scrollIntoView({ block: 'nearest' });
       };
       const done = (v) => { off(); wrap.remove(); G.audio.sfx(v < 0 ? 'cancel' : 'ok'); res(v); };
       const off = G.input.on((k) => {
-        if (k === 'up') { sel = (sel + items.length - 1) % items.length; G.audio.sfx('move'); draw(); }
-        if (k === 'down') { sel = (sel + 1) % items.length; G.audio.sfx('move'); draw(); }
-        if ((k === 'left' || k === 'right') && o.lr) { const r = o.lr(sel, k === 'left' ? -1 : 1); if (r) draw(); }
+        if (k === 'up') { sel = (sel + items.length - 1) % items.length; G.audio.sfx('move'); update(); }
+        if (k === 'down') { sel = (sel + 1) % items.length; G.audio.sfx('move'); update(); }
+        if ((k === 'left' || k === 'right') && o.lr) { const r = o.lr(sel, k === 'left' ? -1 : 1); if (r === 'close') { off(); wrap.remove(); G.audio.sfx('move'); res(-2); return; } if (r) build(); else update(); }
         if (k === 'ok') { if (items[sel].disabled && !o.allowDisabled) { G.audio.sfx('error'); return; } done(sel); }
         if ((k === 'cancel' || k === 'menu') && o.cancel !== false) done(-1);
       });
-      this.redraw = draw;
-      draw();
+      this.redraw = build;
+      build();
     });
   }
   async yesno(q, name, look) { if (q) await this.sayKeep(name, q, look); const r = await this.choose(['是', '否'], { cls: 'small', cancel: true }); this.closeKeep(); return r === 0; }
@@ -213,7 +222,8 @@ export class UI {
       const h = S.heroes[id];
       const rows = EQUIP_SLOTS.map(sl => ({ label: SLOT_N[sl], sub: GEAR[h.equip[sl]]?.name || (sl === 'L' && GEAR[h.equip.R]?.hands === 2 ? '（雙手武器）' : '—') }));
       rows.push({ label: '⚙ 最強裝備', sub: '自動挑選' }, { label: '全部卸下', sub: '' }, { label: '換人', sub: '◀ ▶' });
-      const i = await this.choose(rows, { title: HEROES[id].name + '　裝備', info: (k) => k < EQUIP_SLOTS.length && h.equip[EQUIP_SLOTS[k]] ? this.gearHTML(h.equip[EQUIP_SLOTS[k]], id) : this.statusHTML(id), start, lr: (k, d) => { const all = [...S.party, ...S.reserve]; id = all[(all.indexOf(id) + d + all.length) % all.length]; return false; } });
+      const i = await this.choose(rows, { title: HEROES[id].name + '　裝備', info: (k) => k < EQUIP_SLOTS.length && h.equip[EQUIP_SLOTS[k]] ? this.gearHTML(h.equip[EQUIP_SLOTS[k]], id) : this.statusHTML(id), start, lr: (k, d) => { const all = [...S.party, ...S.reserve]; id = all[(all.indexOf(id) + d + all.length) % all.length]; start = k; return 'close'; } });
+      if (i === -2) continue;
       if (i < 0) return;
       start = i;
       if (i === EQUIP_SLOTS.length) { this.optimize(id); this.G.audio.sfx('item'); this.toast('已換上最強裝備'); continue; }

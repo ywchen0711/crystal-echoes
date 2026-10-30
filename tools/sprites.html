@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><title>Sprite Sheet</title>
+<style>body{background:#2a2e48;color:#eee;font-family:sans-serif;margin:10px} canvas{image-rendering:pixelated;margin:2px;background:#3a4068} .row{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px;margin-bottom:10px} figure{margin:0;text-align:center;font-size:11px}</style></head>
+<body>
+<div id="out"></div>
+<script type="module">
+// Dev tool: shows every generated sprite so the pixel art can be checked at a glance.
+import { personSheet, battleSheet, monsterPx, propPx } from '../js/pixel.js';
+import { HEROES, ECHOES, ENEMIES } from '../js/data.js';
+import { LOOKS } from '../js/maps.js';
+const out = document.getElementById('out');
+const add = (title, canvas, scale = 3) => { const f = document.createElement('figure'); canvas.style.width = canvas.width * scale + 'px'; f.appendChild(canvas); f.appendChild(document.createElement('br')); f.append(title); return f; };
+const row = (label) => { const h = document.createElement('h4'); h.textContent = label; out.appendChild(h); const r = document.createElement('div'); r.className = 'row'; out.appendChild(r); return r; };
+let r = row('Heroes (battle sheet)');
+for (const [id, H] of Object.entries(HEROES)) r.appendChild(add(H.name, battleSheet(H.look), 2.5));
+r = row('Heroes (field sheet)');
+for (const [id, H] of Object.entries(HEROES)) r.appendChild(add(H.name, personSheet(H.look), 2));
+r = row('Echoes');
+for (const [id, E] of Object.entries(ECHOES)) r.appendChild(add(E.short, battleSheet(E.look), 2));
+r = row('NPCs');
+for (const [id, L] of Object.entries(LOOKS)) if (L) r.appendChild(add(id, personSheet(L), 1.5));
+r = row('Monsters');
+for (const [id, E] of Object.entries(ENEMIES)) r.appendChild(add(E.name, monsterPx(E.kind, E.colors).canvas(), 2.5));
+r = row('Props');
+for (const k of ['tree', 'pine', 'palm', 'bush', 'flowers', 'lamp', 'sign', 'crystal', 'rock', 'reeds', 'cactus', 'chest']) r.appendChild(add(k, propPx(k, k === 'bush' ? { flower: '#f47a7a' } : {}).canvas(), 3));
+</script></body></html>

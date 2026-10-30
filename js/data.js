@@ -375,7 +375,7 @@ export const ITEMS = {
 };
 
 // gear: slot w (weapon, with type), a (armor), x (accessory)
-export const GEAR = {
+const GEAR_T = {
   w_bronze_sword: { name: '青銅劍', slot: 'w', type: 'sword', price: 100, atk: 8 },
   w_iron_sword: { name: '鐵劍', slot: 'w', type: 'sword', price: 380, atk: 16 },
   w_knight_sword: { name: '騎士劍', slot: 'w', type: 'sword', price: 1200, atk: 28 },
@@ -419,6 +419,14 @@ export const GEAR = {
   x_amulet: { name: '生命護符', slot: 'x', price: 1800, hp: 150 },
   x_crystal: { name: '迴響水晶墜', slot: 'x', price: 0, hp: 100, mp: 30, atk: 8, mag: 8 },
 };
+// refined / enchanted ids (e.g. "g_sword3+2@fire") are resolved on demand by content.js
+let gearResolver = () => undefined;
+const gearDyn = new Map();
+export function setGearResolver(f) { gearResolver = f; }
+export const GEAR = new Proxy(GEAR_T, {
+  get(t, k) { if (k in t) return t[k]; if (typeof k !== 'string' || !/[+@]/.test(k)) return undefined; if (!gearDyn.has(k)) gearDyn.set(k, gearResolver(k)); return gearDyn.get(k); },
+  has(t, k) { return k in t || (typeof k === 'string' && /[+@]/.test(k) && !!gearResolver(k)); },
+});
 
 // ---------------------------------------------------------------- monsters
 // shield = break points; weak = what removes them; acts = [skill, weight]

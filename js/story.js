@@ -1,19 +1,30 @@
 // The story, every conversation, side quests, sanctum trials, minigames and the shops' stock.
 import { HEROES, ECHOES, SKILLS, ITEMS, GEAR, ENEMIES, ARENA, SUMMONS } from './data.js';
 import { addHero, addEcho, setEcho, addItem, itemName, healAll, heroStats } from './party.js';
+import { GEAR_BY_TIER, SPELLS } from './content.js';
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
+// shop stock comes from the generated tables: plain gear of the town's tiers, a few rare pieces, and items
+const tierGear = (tiers) => tiers.flatMap(t => GEAR_BY_TIER[t].base);
+const rareGear = (tiers, n, seed) => { const pool = tiers.flatMap(t => GEAR_BY_TIER[t].rare); const out = []; for (let i = 0; i < n && pool.length; i++) out.push(pool[(seed * 7 + i * 37) % pool.length]); return [...new Set(out)]; };
+const accGear = (maxT) => GEAR_BY_TIER.slice(0, maxT + 1).flatMap(b => b.acc).filter(g => GEAR[g].price);
+const foods = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => `i_food${a + i}`);
+const scrollsUpTo = (t) => Object.keys(ITEMS).filter(i => ITEMS[i].cat === 'scroll' && SKILLS[ITEMS[i].use.cast].tier <= t);
 export const SHOPS = {
-  port_items: ['potion', 'ether', 'antidote', 'feather', 'tent', 'bombfrag', 'smokeball'],
-  port_gear: ['w_bronze_sword', 'w_iron_sword', 'w_iron_spear', 'w_steel_spear', 'w_oak_staff', 'w_magic_staff', 'a_cloth', 'a_leather', 'a_robe', 'x_charm'],
-  anvil_items: ['potion', 'hipotion', 'ether', 'antidote', 'feather', 'tent', 'bombfrag', 'frostfrag', 'boltfrag', 'smokeball'],
-  anvil_gear: ['w_knight_sword', 'w_trident', 'w_sage_staff', 'w_hammer', 'w_war_axe', 'w_short_bow', 'a_chain', 'a_robe', 'a_plate', 'x_ring', 'x_earring'],
-  anvil_mats: ['bombfrag', 'frostfrag', 'boltfrag', 'megapotion'],
-  azur_items: ['hipotion', 'xpotion', 'ether', 'hiether', 'antidote', 'feather', 'megapotion', 'tent', 'frostfrag', 'boltfrag'],
-  azur_gear: ['w_mythril_sword', 'w_ice_lance', 'w_crystal_staff', 'w_mythril_axe', 'w_long_bow', 'w_wave_bow'],
-  azur_armor: ['a_plate', 'a_silk', 'a_mythril', 'x_boots', 'x_amulet', 'x_charm'],
+  port_items: ['potion', 'ether', 'antidote', 'i_c_poison', 'i_c_sleep', 'i_c_blind', 'feather', 'tent', 'bombfrag', 'frostfrag', 'i_tw_dagger1', 'i_tw_hammer1', 'smokeball', 'i_repel', 'i_scope', ...foods(1, 6)],
+  port_gear: [...tierGear([0, 1])],
+  anvil_items: ['potion', 'hipotion', 'ether', 'antidote', 'i_c_poison', 'i_c_sleep', 'i_c_silence', 'i_c_blind', 'i_c_slow', 'i_c_stun', 'feather', 'tent', 'smokeball', 'i_repel', 'i_lure', 'i_scope', 'i_b_atk1', 'i_b_def1', 'i_b_mag1', 'i_b_spr1', 'i_b_spd1', 'i_refine1', 'i_refine2', ...foods(7, 18)],
+  anvil_gear: [...tierGear([2, 3])],
+  anvil_mats: ['bombfrag', 'frostfrag', 'boltfrag', 'i_t_water1', 'i_t_wind1', 'i_t_earth1', 'i_t_light1', 'i_t_dark1', ...['dagger', 'spear', 'axe', 'hammer', 'bow', 'gun', 'boomerang', 'sword'].map(w => `i_tw_${w}1`), 'i_s_poison1', 'i_s_sleep1', 'i_s_blind1', 'i_s_silence1', 'megapotion', ...rareGear([1, 2, 3], 14, 3)],
+  azur_items: ['hipotion', 'i_hp3', 'i_hp4', 'xpotion', 'ether', 'hiether', 'i_mp3', 'i_el1', 'antidote', 'i_c_all', 'i_c_confuse', 'i_c_curse', 'feather', 'i_rv2', 'megapotion', 'i_ga2', 'tent', 'i_cottage', 'i_warp', 'i_repel', 'i_haste', 'i_regen', 'i_reflect', 'i_ba_atk1', 'i_ba_def1', 'i_ba_mag1', 'i_ba_spr1', 'i_ba_spd1', 'i_refine3', ...foods(19, 40), ...scrollsUpTo(3)],
+  azur_gear: [...tierGear([4, 5]).filter(g => GEAR[g].slot === 'hand'), ...rareGear([3, 4, 5], 16, 11)],
+  azur_armor: [...tierGear([4, 5]).filter(g => GEAR[g].slot !== 'hand'), ...accGear(5)],
+  late_items: ['i_hp5', 'i_hp6', 'i_mp4', 'i_el2', 'i_ga3', 'i_rv3', 'i_gm1', 'i_reraise', 'i_mirror', 'i_refine4', ...ELS_T(2), ...ELS_T(3), ...scrollsUpTo(5)],
+  late_gear: [...tierGear([6, 7]), ...rareGear([6, 7], 20, 5), ...accGear(7)],
 };
+function ELS_T(t) { return ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'].map(e => `i_t_${e}${t}`); }
+export const SPELL_SHOP = (maxTier) => SPELLS.filter(s => SKILLS[s].tier <= maxTier && !/x\d_/.test(s));
 const INN_PRICE = { port: 30, anvil: 60, azurelle: 100 };
 
 // ---------------------------------------------------------------- quests
@@ -78,6 +89,14 @@ export function makeStory(G) {
     if (Q.reward.gil) gil(Q.reward.gil);
     for (const [id, n] of Q.reward.items || []) give(id, n);
   }
+
+  // shops that also teach magic, and weapon shops that also refine
+  const shopOrMagic = async (list, title, tier) => {
+    for (;;) { const c = await ui.choose([{ label: '買賣道具' }, { label: '學習魔法', sub: `第${tier}級以下` }], { title, cls: 'small' }); if (c < 0) return; if (c === 0) await ui.shop(list, title); else await ui.magicShop(SPELL_SHOP(tier), '魔法店'); }
+  };
+  const gearOrSmith = async (list, title, maxTier) => {
+    for (;;) { const c = await ui.choose([{ label: '買賣裝備' }, { label: '強化・鑲嵌' }], { title, cls: 'small' }); if (c < 0) return; if (c === 0) await ui.shop(list, title); else await ui.smith(maxTier); }
+  };
 
   // ---------------------------------------------------------------- events (map triggers)
   const EV = {
@@ -363,8 +382,8 @@ export function makeStory(G) {
       if (q === 'taken') return say('修女', `已經找到 ${S().mogu.length} 隻了。剩下的還躲在港口的某個角落……`, 'lady');
       return say('修女', '神殿的咪咕們最喜歡躲在角落、花叢和碼頭邊了。', 'lady');
     },
-    async port_itemshop() { await say('道具店老闆', '歡迎光臨！要買點什麼？', 'merchant'); await ui.shop(SHOPS.port_items, '道具店'); },
-    async port_weapon() { await say('武器店老闆', '好的武器能保命。慢慢挑！', 'smith'); await ui.shop(SHOPS.port_gear, '武器・防具店'); },
+    async port_itemshop() { await say('道具店老闆', '歡迎光臨！我也會教一點簡單的魔法喔。', 'merchant'); await shopOrMagic(SHOPS.port_items, '道具店', 1); },
+    async port_weapon() { await say('武器店老闆', '好的武器能保命。十六種武器、七個部位的防具，慢慢挑！', 'smith'); await gearOrSmith(SHOPS.port_gear, '武器・防具店', 2); },
     async guild_master() { return say('公會長', '冒險者公會歡迎你！\n委託板上的工作完成後，回到委託板就能領報酬。', 'merchant'); },
     async guild_adv1() { return say('冒險者', '敵人頭上的數字是「破防值」，打中弱點就會減少。\n減到零，敵人就會暈倒一陣子，受到的傷害也會變大！', 'guard'); },
     async guild_adv2() { return say('冒險者', '聽說大陸各地有「光之祠堂」，裡面住著傳說英雄的迴響。\n要回答英雄的問題才能得到力量喔。答案就藏在壁畫裡。', 'lady'); },
@@ -408,9 +427,9 @@ export function makeStory(G) {
       }
       return say('老技師 古德', '飛空艇是我們家三代人的夢想。\n我年輕時摔了三次，蕾娜的爸爸摔了五次……哈哈哈！', 'engineer');
     },
-    async anvil_item() { await say('道具店', '礦坑裡很危險，多帶點藥吧。', 'merchant'); await ui.shop(SHOPS.anvil_items, '道具店'); },
-    async anvil_gear() { await say('武器店', '鐵砧城的武器，大陸第一！', 'smith'); await ui.shop(SHOPS.anvil_gear, '武器・防具店'); },
-    async anvil_stall() { await say('攤販', '自家做的炸彈碎片，打在弱點上效果超好！', 'engineer'); await ui.shop(SHOPS.anvil_mats, '攤販'); },
+    async anvil_item() { await say('道具店', '礦坑裡很危險，多帶點藥吧。魔法也可以在這裡學。', 'merchant'); await shopOrMagic(SHOPS.anvil_items, '道具店', 2); },
+    async anvil_gear() { await say('武器店', '鐵砧城的武器，大陸第一！強化和鑲嵌也交給我。', 'smith'); await gearOrSmith(SHOPS.anvil_gear, '武器・防具店', 5); },
+    async anvil_stall() { await say('攤販', '投擲道具打在弱點上效果超好！還有礦坑裡挖到的稀有裝備喔。', 'engineer'); await ui.shop(SHOPS.anvil_mats, '攤販'); },
     async anvil_forge() {
       if (quest('q_letter') === 'taken') { await say('鍛冶師傅 鋼爾', '哈克那傢伙寫信給我？……哈哈，他還是一樣愛操心。謝啦！', 'smith'); delete S().items.k_letter; await rewardQuest('q_letter'); }
       if (quest('q_leo') === 'taken') {
@@ -444,8 +463,8 @@ export function makeStory(G) {
       await say('尼歐', '沉沒神殿在城南湖中的小島上，從堤道走過去。\n出發前，可以到城裡的競技場試試身手。', 'neo');
       G.field.locked = false;
     },
-    async azur_item() { await say('道具店', '水都的藥品，品質保證！', 'merchant'); await ui.shop(SHOPS.azur_items, '道具店'); },
-    async azur_weapon() { await say('武器店', '秘銀打造的武器，又輕又利。', 'smith'); await ui.shop(SHOPS.azur_gear, '武器店'); },
+    async azur_item() { await say('道具店', '水都的藥品，品質保證！魔法學院的老師也在這裡教課。', 'merchant'); await shopOrMagic(F().airship_built ? [...SHOPS.azur_items, ...SHOPS.late_items] : SHOPS.azur_items, '道具店', F().cleared ? 5 : F().airship_built ? 4 : 3); },
+    async azur_weapon() { await say('武器店', '秘銀打造的武器，又輕又利。', 'smith'); await gearOrSmith(F().airship_built ? [...SHOPS.azur_gear, ...SHOPS.late_gear] : SHOPS.azur_gear, '武器店', 7); },
     async azur_armor() { await say('防具店', '水都的絲綢法衣，可是有名的喔。', 'lady'); await ui.shop(SHOPS.azur_armor, '防具・飾品店'); },
     async azur_arena() { await arena(); },
     async azur_watch() { return say('衛兵', '上面是「水守之殿」，水守的長老住在那裡。', 'watchman'); },

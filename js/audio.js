@@ -166,6 +166,7 @@ export class Audio {
       case 'talk': tone(700 + Math.random() * 200, 0.025, 'square', 0.025); break;
       case 'hit': noise(0.12, 900, 0.3); tone(180, 0.1, 'square', 0.1, 60); break;
       case 'weak': noise(0.15, 1400, 0.35); tone(320, 0.15, 'sawtooth', 0.12, 80); break;
+      case 'guard': tone(1500, 0.09, 'triangle', 0.1, 900); noise(0.06, 4200, 0.18, 'highpass'); break;
       case 'swing': noise(0.1, 3000, 0.12, 'highpass'); break;
       case 'cast': arp([660, 880, 1100], 0.04, 'triangle', 0.08); break;
       case 'break': arp([1568, 1175, 1568, 2093], 0.05, 'square', 0.12); noise(0.3, 2000, 0.3); break;

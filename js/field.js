@@ -299,7 +299,11 @@ export class Field {
   encounterTick(d) {
     const enc = this.encTable(); if (!enc) return;
     if (this.G.noEncounters) return;
-    this.danger += d * (100 / (this.def.encRate || 30)) * (this.G.encMul || 1);
+    const S = this.G.S;
+    if (S.repel > 0) { S.repel -= d; if (S.repel <= 0) this.G.ui.toast('驅魔香的效果消失了'); return; }
+    let mul = 1; for (const id of S.party) { const f = this.G.partyFx?.(id); if (f?.enc) mul += f.enc; }
+    if (S.lure > 0) { S.lure -= d; mul *= 2; }
+    this.danger += d * (100 / (this.def.encRate || 30)) * (this.G.encMul || 1) * Math.max(0.2, mul);
     if (this.danger > 100 * (0.8 + Math.random() * 0.4) && this.danger > 70) { this.danger = 0; this.G.randomBattle(enc); }
   }
   encTable() {

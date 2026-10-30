@@ -1,6 +1,7 @@
 // Menus and windows: dialogue, choices, the main menu, shops, inns, notices and little overlays.
 import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js';
-import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills } from './party.js';
+import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands } from './party.js';
+import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N } from './content.js';
 import { personSheet, battleSheet } from './pixel.js';
 import { lookOf } from './field.js';
 
@@ -98,20 +99,21 @@ export class UI {
     let start = 0;
     for (;;) {
       this.hud();
-      const opts = ['隊伍狀態', '迴響水晶', '能力配置', '裝備', '道具', '委託任務', '召喚獸', '隊伍編成', '存檔', '設定', '關閉選單'];
+      const opts = ['隊伍狀態', '迴響水晶', '能力配置', '裝備', '魔法・戰技', '道具', '委託任務', '召喚獸', '隊伍編成', '存檔', '設定', '關閉選單'];
       const i = await this.choose(opts.map(l => ({ label: l })), { title: `${G.mapName()}　<span class="gil">${S.gil} G</span>　<span class="tm">${fmtTime(S.time)}</span>`, info: this.partySummary(), start, cls: 'mainmenu' });
       start = Math.max(0, i);
-      if (i < 0 || i === 10) break;
+      if (i < 0 || i === 11) break;
       if (i === 0) await this.statusMenu();
       if (i === 1) await this.echoMenu();
       if (i === 2) await this.passiveMenu();
       if (i === 3) await this.equipMenu();
-      if (i === 4) await this.itemMenu();
-      if (i === 5) await this.questMenu();
-      if (i === 6) await this.summonMenu();
-      if (i === 7) await this.formationMenu();
-      if (i === 8) { if (G.canSave()) { G.save(); this.toast('已存檔'); G.audio.sfx('save'); } else this.toast('這裡無法存檔（請到存檔水晶旁）'); }
-      if (i === 9) await this.settingsMenu();
+      if (i === 4) await this.magicMenu();
+      if (i === 5) await this.itemMenu();
+      if (i === 6) await this.questMenu();
+      if (i === 7) await this.summonMenu();
+      if (i === 8) await this.formationMenu();
+      if (i === 9) { if (G.canSave()) { G.save(); this.toast('已存檔'); G.audio.sfx('save'); } else this.toast('這裡無法存檔（請到存檔水晶旁）'); }
+      if (i === 10) await this.settingsMenu();
     }
     this.hud();
   }
@@ -129,7 +131,8 @@ export class UI {
     return `<div class="st"><img class="st-big" src="${fullSprite(id, true)}"><div><h3 style="color:${H.color}">${H.name} <small>${H.title}</small></h3>
       <div>Lv ${h.lv}　EXP ${h.exp}/${EXP_NEXT(h.lv)}</div>
       <table><tr><td>HP</td><td>${h.hp}/${st.hp}</td><td>MP</td><td>${h.mp}/${st.mp}</td></tr><tr><td>攻擊</td><td>${st.atk}</td><td>防禦</td><td>${st.def}</td></tr><tr><td>魔力</td><td>${st.mag}</td><td>精神</td><td>${st.spr}</td></tr><tr><td>速度</td><td>${st.spd}</td><td>AP</td><td>${apUsed(S, id)}/${apCap(S, id)}</td></tr></table>
-      <div>武器 ${GEAR[h.equip.w]?.name || '—'}　防具 ${GEAR[h.equip.a]?.name || '—'}　飾品 ${GEAR[h.equip.x]?.name || '—'}</div>
+      <div class="st-eq">${EQUIP_SLOTS.map(sl => `<span><small>${SLOT_N[sl]}</small>${GEAR[h.equip[sl]]?.name || (sl === 'L' && GEAR[h.equip.R]?.hands === 2 ? '（雙手）' : '—')}</span>`).join('')}</div>
+      <div class="st-fx">${fxText(gearFx(S, id)).join('、') || '裝備沒有特殊效果'}</div>
       <div>迴響 ${h.echo ? ECHOES[h.echo].name : '—'}</div>
       <div class="st-sk">技能：${sk.own.map(s => SKILLS[s].name).join('、')}${sk.echo.length ? '<br>迴響技能：' + sk.echo.map(s => SKILLS[s].name).join('、') : ''}</div>
       <div class="st-bio">${H.bio}</div></div></div>`;
@@ -176,48 +179,132 @@ export class UI {
       if (!togglePassive(S, id, L[i])) { this.G.audio.sfx('error'); this.toast('AP 不足'); }
     }
   }
-  gearLine(g) { if (!g) return ''; const G = GEAR[g]; return ['atk', 'def', 'mag', 'spr', 'spd', 'hp', 'mp'].filter(k => G[k]).map(k => ({ atk: '攻', def: '防', mag: '魔', spr: '精', spd: '速', hp: 'HP', mp: 'MP' })[k] + '+' + G[k]).join(' ') + (G.immune ? ' 防異常' : ''); }
+  gearLine(g) {
+    if (!g) return ''; const G = GEAR[g]; if (!G) return '';
+    const st = ['atk', 'def', 'mag', 'spr', 'spd', 'hp', 'mp'].filter(k => G[k]).map(k => ({ atk: '攻', def: '防', mag: '魔', spr: '精', spd: '速', hp: 'HP', mp: 'MP' })[k] + (G[k] > 0 ? '+' : '') + G[k]).join(' ');
+    const f = fxText(G.fx); return st + (f.length ? '　' + f.slice(0, 2).join('、') : '');
+  }
+  gearKind(G) { return G.slot === 'hand' ? (G.type === 'shield' ? '盾' : (WTYPES[G.type]?.n || WPN[G.type]) + (G.hands === 2 ? '・雙手' : '')) : G.slot === 'acc' ? '飾品' : `${STYLE_N[G.style] || ''}・${SLOT_N[G.slot] || ''}`; }
+  gearHTML(g, id) {
+    const G = GEAR[g]; if (!G) return '';
+    const W = G.slot === 'hand' && G.type !== 'shield' ? WTYPES[G.type] : null;
+    const f = fxText(G.fx);
+    const h = id ? this.S.heroes[id] : null;
+    const teach = G.teach ? `<div class="gi-teach">✦ 可學會：<b>${SKILLS[G.teach].name}</b>（${SCHOOL_N[SKILLS[G.teach].school]}）${h ? (h.spells?.includes(G.teach) ? '　已學會' : `　AP ${h.ap?.[G.teach] || 0}/${G.ap}`) : `　需要 AP ${G.ap}`}<br><small>${SKILLS[G.teach].desc}</small></div>` : '';
+    return `<div class="gi"><h4>${G.name}</h4><div class="gi-kind">${this.gearKind(G)}${G.tier != null ? `　${TIER_N[G.tier]}階` : ''}${G.refine ? `　強化+${G.refine}` : ''}</div>
+      <div>${this.gearLine(g).split('　')[0] || ''}</div>
+      ${W ? `<div class="gi-trait">${W.trait}</div>` : ''}${G.type === 'shield' ? `<div class="gi-trait">盾：被物理攻擊時有機會完全格擋</div>` : ''}
+      ${f.length ? `<div class="gi-fx">${f.map(x => `<span>${x}</span>`).join('')}</div>` : ''}${G.desc ? `<div>${G.desc}</div>` : ''}${teach}</div>`;
+  }
+  // try on a piece without keeping it, to compare stats
+  tryOn(id, slot, g) {
+    const S = this.S, h = S.heroes[id], old = { ...h.equip };
+    h.equip[slot] = g; const G = GEAR[g]; const other = slot === 'R' ? 'L' : slot === 'L' ? 'R' : null;
+    if (other && G && (G.hands === 2 || GEAR[old[other]]?.hands === 2)) h.equip[other] = null;
+    const st = heroStats(S, id); h.equip = old; return st;
+  }
   async equipMenu() {
-    const S = this.S; const id = await this.heroPick('裝備', true); if (!id) return;
+    const S = this.S; let id = await this.heroPick('裝備', true); if (!id) return;
+    let start = 0;
     for (;;) {
       const h = S.heroes[id];
-      const slots = [['w', '武器'], ['a', '防具'], ['x', '飾品']];
-      const i = await this.choose(slots.map(([s, n]) => ({ label: n, sub: GEAR[h.equip[s]]?.name || '—' })), { title: HEROES[id].name + '　裝備', info: this.statusHTML(id) });
+      const rows = EQUIP_SLOTS.map(sl => ({ label: SLOT_N[sl], sub: GEAR[h.equip[sl]]?.name || (sl === 'L' && GEAR[h.equip.R]?.hands === 2 ? '（雙手武器）' : '—') }));
+      rows.push({ label: '⚙ 最強裝備', sub: '自動挑選' }, { label: '全部卸下', sub: '' }, { label: '換人', sub: '◀ ▶' });
+      const i = await this.choose(rows, { title: HEROES[id].name + '　裝備', info: (k) => k < EQUIP_SLOTS.length && h.equip[EQUIP_SLOTS[k]] ? this.gearHTML(h.equip[EQUIP_SLOTS[k]], id) : this.statusHTML(id), start, lr: (k, d) => { const all = [...S.party, ...S.reserve]; id = all[(all.indexOf(id) + d + all.length) % all.length]; return false; } });
       if (i < 0) return;
-      const slot = slots[i][0];
-      const opts = Object.keys(S.items).filter(g => GEAR[g] && GEAR[g].slot === slot && canEquip(id, g));
-      const j = await this.choose([{ label: '（卸下）', disabled: slot === 'w' }, ...opts.map(g => ({ label: GEAR[g].name, sub: this.gearLine(g) + ' ×' + S.items[g] }))], { title: slots[i][1], info: (k) => k === 0 ? '' : this.compare(id, slot, opts[k - 1]) });
+      start = i;
+      if (i === EQUIP_SLOTS.length) { this.optimize(id); this.G.audio.sfx('item'); this.toast('已換上最強裝備'); continue; }
+      if (i === EQUIP_SLOTS.length + 1) { for (const sl of EQUIP_SLOTS) if (h.equip[sl] && !(sl === 'R' && !GEAR[h.equip.R]?.type)) equip(S, id, sl, null); this.G.audio.sfx('item'); continue; }
+      if (i === EQUIP_SLOTS.length + 2) { const all = [...S.party, ...S.reserve]; id = all[(all.indexOf(id) + 1) % all.length]; continue; }
+      const slot = EQUIP_SLOTS[i];
+      const opts = Object.keys(S.items).filter(g => S.items[g] > 0 && GEAR[g] && slotFits(slot, g) && canEquip(id, g)).sort((a, b) => (GEAR[b].tier || 0) - (GEAR[a].tier || 0) || (GEAR[b].price || 0) - (GEAR[a].price || 0));
+      if (!opts.length && !h.equip[slot]) { this.toast(`沒有${HEROES[id].name}能裝在「${SLOT_N[slot]}」的東西`); continue; }
+      const j = await this.choose([{ label: '（卸下）' }, ...opts.map(g => ({ label: GEAR[g].name + (GEAR[g].teach && !h.spells?.includes(GEAR[g].teach) ? ' ✦' : ''), sub: this.gearKind(GEAR[g]) + ' ×' + S.items[g] }))], { title: SLOT_N[slot], info: (k) => k === 0 ? this.compareWith(id, slot, null) : this.compareWith(id, slot, opts[k - 1]) + this.gearHTML(opts[k - 1], id) });
       if (j < 0) continue;
       equip(S, id, slot, j === 0 ? null : opts[j - 1]); this.G.audio.sfx('item');
     }
   }
-  compare(id, slot, g) {
-    const S = this.S, before = heroStats(S, id); const h = S.heroes[id]; const old = h.equip[slot]; h.equip[slot] = g; const after = heroStats(S, id); h.equip[slot] = old;
+  // pick the strongest piece for every slot (weapons by power, armor by defence + spirit)
+  optimize(id) {
+    const S = this.S, h = S.heroes[id];
+    const score = (g, sl) => { const G = GEAR[g]; if (!G) return -1; const main = Math.max(HEROES[id].base.atk, HEROES[id].base.mag) === HEROES[id].base.mag ? 'mag' : 'atk'; return sl === 'R' ? (G[main] || 0) * 2 + (G.atk || 0) + (G.mag || 0) + fxText(G.fx).length * 3 : (G.def || 0) + (G.spr || 0) + (G.hp || 0) / 10 + (G.mp || 0) / 5 + (G.atk || 0) + (G.mag || 0) + (G.spd || 0) * 2 + fxText(G.fx).length * 4 + (G.fx?.block || 0) * 40; };
+    for (const sl of EQUIP_SLOTS) {
+      if (sl === 'L' && GEAR[h.equip.R]?.hands === 2) continue;
+      const cur = h.equip[sl];
+      const pool = Object.keys(S.items).filter(g => S.items[g] > 0 && GEAR[g] && slotFits(sl, g) && canEquip(id, g) && (sl !== 'R' || GEAR[g].type !== 'shield') && (sl !== 'L' || GEAR[g].type === 'shield'));
+      let best = cur, bs = score(cur, sl);
+      for (const g of pool) { const v = score(g, sl); if (v > bs) { bs = v; best = g; } }
+      if (best !== cur) equip(S, id, sl, best);
+    }
+  }
+  compareWith(id, slot, g) {
+    const before = heroStats(this.S, id), after = this.tryOn(id, slot, g);
     return `<div class="cmp">${['hp', 'mp', 'atk', 'def', 'mag', 'spr', 'spd'].map(k => { const d = after[k] - before[k]; return `<div><span>${({ hp: 'HP', mp: 'MP', atk: '攻擊', def: '防禦', mag: '魔力', spr: '精神', spd: '速度' })[k]}</span><b>${before[k]}</b>→<b class="${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${after[k]}</b></div>`; }).join('')}</div>`;
+  }
+  compare(id, slot, g) { return this.compareWith(id, slot, g); }
+  async magicMenu() {
+    const S = this.S; let id = await this.heroPick('魔法・戰技', true); if (!id) return;
+    for (;;) {
+      const h = S.heroes[id];
+      const i = await this.choose([{ label: '魔法一覽', sub: spellsOf(S, id).length + '' }, { label: '學習中的魔法', sub: Object.keys(h.ap || {}).length + '' }, { label: '武器熟練度', sub: '' }], { title: HEROES[id].name + '　魔法・戰技', info: '<p>魔法可以從三個地方學會：</p><p>✦ 裝備上帶有魔法的武器或防具，戰鬥勝利會得到 AP，存滿就永久學會。</p><p>✦ 城鎮的魔法店花錢學習。</p><p>✦ 裝備的期間就能先用。</p><p>戰技：用某種武器戰鬥會提升熟練度，學會那種武器的戰技。</p>' });
+      if (i < 0) return;
+      if (i === 0) {
+        const list = spellsOf(S, id).sort((a, b) => Object.keys(SCHOOL_N).indexOf(SKILLS[a].school) - Object.keys(SCHOOL_N).indexOf(SKILLS[b].school) || SKILLS[a].tier - SKILLS[b].tier);
+        if (!list.length) { this.toast('還沒有學會魔法'); continue; }
+        await this.choose(list.map(s => ({ label: SKILLS[s].name + (h.spells?.includes(s) ? '' : ' ✦'), sub: `${SCHOOL_N[SKILLS[s].school]}　MP ${SKILLS[s].mp}`, desc: SKILLS[s].desc + (h.spells?.includes(s) ? '' : '　（✦ 裝備中才能用）') })), { title: `${HEROES[id].name} 的魔法（${list.length}）`, cls: 'items' });
+      }
+      if (i === 1) {
+        const pend = EQUIP_SLOTS.map(sl => GEAR[h.equip[sl]]).filter(g => g?.teach && !h.spells?.includes(g.teach));
+        if (!pend.length) { await this.info('<p>目前的裝備沒有可以學的魔法。</p><p>名字前面有特殊字的裝備（例如「炎之」「再生」）通常帶有魔法，裝備清單裡標有 ✦。</p>', '學習中'); continue; }
+        await this.choose(pend.map(g => ({ label: SKILLS[g.teach].name, sub: `AP ${h.ap?.[g.teach] || 0}/${g.ap}`, desc: `來自：${g.name}　${SKILLS[g.teach].desc}` })), { title: '學習中的魔法', cls: 'items' });
+      }
+      if (i === 2) {
+        const types = [...new Set([...APT[id].w, ...(APT[id].shield ? ['shield'] : [])])];
+        await this.choose(types.map(t => { const lv = masteryLv(S, id, t), p = h.mastery?.[t] || 0; return { label: `${ICON[t] || ''} ${WPN[t]}`, sub: `Lv ${lv}/5`, desc: `熟練度 ${p}${lv < 5 ? `／下一級 ${MASTERY_AT[lv]}` : '（已滿）'}　戰技：${(ARTS_BY_TYPE[t] || []).map((a, k) => (k < lv ? '' : '🔒') + SKILLS[a].name).join('、')}` }; }), { title: `${HEROES[id].name} 的武器熟練度`, info: (k) => `<div class="gi"><h4>${WPN[types[k]]}</h4>${WTYPES[types[k]] ? `<div class="gi-trait">${WTYPES[types[k]].trait}</div>` : '<div class="gi-trait">盾：被物理攻擊時有機會完全格擋</div>'}${(ARTS_BY_TYPE[types[k]] || []).map((a, n) => `<div class="${n < masteryLv(S, id, types[k]) ? '' : 'dim'}">${n < masteryLv(S, id, types[k]) ? '◆' : '🔒'} <b>${SKILLS[a].name}</b>　${SKILLS[a].desc}</div>`).join('')}</div>` });
+      }
+    }
   }
   async itemMenu() {
     const S = this.S;
     for (;;) {
-      const list = Object.keys(S.items).filter(i => S.items[i] > 0).sort((a, b) => (ITEMS[a] ? 0 : 1) - (ITEMS[b] ? 0 : 1));
-      if (!list.length) { this.toast('沒有道具'); return; }
-      const i = await this.choose(list.map(it => ({ label: itemName(it), sub: '×' + S.items[it], desc: ITEMS[it]?.desc || (GEAR[it] ? this.gearLine(it) : '') })), { title: '道具', cls: 'items' });
-      if (i < 0) return;
-      const id = list[i], I = ITEMS[id];
-      if (!I || !I.use || I.use.dmg || I.use.escape) continue;
-      if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); continue; } S.items[id]--; if (!S.items[id]) delete S.items[id]; const { healAll } = await import('./party.js'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); continue; }
-      const targets = I.tgt === 'allies' ? S.party : [await this.heroPick(I.name + ' 給誰用？', true)];
-      if (!targets[0]) continue;
-      let used = false;
-      for (const t of targets) {
-        const h = S.heroes[t], st = heroStats(S, t);
-        if (I.use.revive) { if (h.hp <= 0) { h.hp = Math.round(st.hp * I.use.revive); used = true; } continue; }
-        if (h.hp <= 0) continue;
-        if (I.use.heal && h.hp < st.hp) { h.hp = Math.min(st.hp, h.hp + I.use.heal); used = true; }
-        if (I.use.mp && h.mp < st.mp) { h.mp = Math.min(st.mp, h.mp + I.use.mp); used = true; }
-        if (I.use.cure) used = true;
+      const own = Object.keys(S.items).filter(i => S.items[i] > 0);
+      if (!own.length) { this.toast('沒有道具'); return; }
+      const gearN = own.filter(i => GEAR[i]).length;
+      const cats = Object.keys(ITEM_CATS).filter(c => own.some(i => ITEMS[i]?.cat === c));
+      const rows = [...cats.map(c => ({ label: ITEM_CATS[c], sub: own.filter(i => ITEMS[i]?.cat === c).length + '' })), ...(gearN ? [{ label: '裝備品', sub: gearN + '' }] : [])];
+      const c = await this.choose(rows, { title: `道具　<span class="gil">${S.gil} G</span>`, cls: 'small' });
+      if (c < 0) return;
+      for (;;) {
+        const list = c < cats.length ? Object.keys(S.items).filter(i => S.items[i] > 0 && ITEMS[i]?.cat === cats[c]) : Object.keys(S.items).filter(i => S.items[i] > 0 && GEAR[i]).sort((a, b) => (GEAR[b].tier || 0) - (GEAR[a].tier || 0));
+        if (!list.length) break;
+        const i = await this.choose(list.map(it => ({ label: itemName(it), sub: '×' + S.items[it], desc: ITEMS[it]?.desc || (GEAR[it] ? this.gearKind(GEAR[it]) + '　' + this.gearLine(it) : '') })), { title: rows[c].label, cls: 'items', info: (k) => GEAR[list[k]] ? this.gearHTML(list[k]) : '' });
+        if (i < 0) break;
+        await this.useFieldItem(list[i]);
       }
-      if (used) { S.items[id]--; if (!S.items[id]) delete S.items[id]; this.G.audio.sfx('heal'); this.hud(); } else this.G.audio.sfx('error');
     }
+  }
+  async useFieldItem(id) {
+    const S = this.S, I = ITEMS[id];
+    if (!I || !I.use || I.use.dmg || I.use.escape || I.use.status && !I.use.self || I.use.analyze || I.use.cast || I.use.buff || I.use.evadeT) { if (I?.use) this.toast('戰鬥中才能使用'); return; }
+    const spend = () => { S.items[id]--; if (!S.items[id]) delete S.items[id]; this.hud(); };
+    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
+    if (I.use.meal) { S.meal = { fx: I.use.meal, n: 5, name: I.name }; spend(); this.G.audio.sfx('heal'); this.toast(`吃了${I.name}！之後5場戰鬥都有效果`); return; }
+    if (I.use.repel) { S.repel = I.use.repel; S.lure = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人不會靠近了'); return; }
+    if (I.use.lure) { S.lure = I.use.lure; S.repel = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人更容易出現了'); return; }
+    if (I.use.warpWorld) { if (this.G.field.world || this.G.field.def.town || !S.lastWorld) { this.toast('這裡不能使用'); return; } spend(); this.G.audio.sfx('flee'); await this.G.warp('world', S.lastWorld.x, S.lastWorld.z, 'down'); return; }
+    const targets = I.tgt === 'allies' ? S.party : [await this.heroPick(I.name + ' 給誰用？', true)];
+    if (!targets[0]) return;
+    let used = false;
+    for (const t of targets) {
+      const h = S.heroes[t], st = heroStats(S, t);
+      if (I.use.grow) { for (const k in I.use.grow) h.grow[k] = (h.grow[k] || 0) + I.use.grow[k]; used = true; this.toast(`${HEROES[t].name} 的能力永久提升了！`); continue; }
+      if (I.use.revive) { if (h.hp <= 0) { h.hp = Math.round(st.hp * I.use.revive); used = true; } continue; }
+      if (h.hp <= 0) continue;
+      if (I.use.heal && h.hp < st.hp) { h.hp = Math.min(st.hp, h.hp + I.use.heal); used = true; }
+      if (I.use.mp && h.mp < st.mp) { h.mp = Math.min(st.mp, h.mp + I.use.mp); used = true; }
+      if (I.use.cure || I.use.cureOnly) used = true;
+    }
+    if (used) { spend(); this.G.audio.sfx('heal'); } else this.G.audio.sfx('error');
   }
   async questMenu() {
     const Q = this.G.quests(); const S = this.S;
@@ -273,21 +360,32 @@ export class UI {
   // ---------------------------------------------------------------- shops and inns
   async shop(list, title = '商店') {
     const S = this.S;
+    const groupOf = (id) => ITEMS[id] ? ITEM_CATS[ITEMS[id].cat] || '道具' : GEAR[id].slot === 'hand' ? (GEAR[id].type === 'shield' ? '盾' : '武器・' + (WTYPES[GEAR[id].type]?.n || '')) : GEAR[id].slot === 'acc' ? '飾品' : SLOT_N[GEAR[id].slot] + '（' + (STYLE_N[GEAR[id].style] || '') + '）';
     for (;;) {
       const m = await this.choose(['購買', '出售'], { title: `${title}　<span class="gil">${S.gil} G</span>`, cls: 'small' });
       if (m < 0) return;
       if (m === 0) {
+        const groups = [...new Set(list.map(groupOf))];
         for (;;) {
-          const i = await this.choose(list.map(id => { const it = ITEMS[id] || GEAR[id]; return { label: it.name, sub: it.price + ' G' + (S.items[id] ? `　持有${S.items[id]}` : ''), disabled: S.gil < it.price, desc: ITEMS[id]?.desc || this.gearLine(id) + (GEAR[id]?.slot === 'w' ? '　' + WPN[GEAR[id].type] : '') }; }), { title: `購買　<span class="gil">${S.gil} G</span>`, info: (i) => GEAR[list[i]] ? this.whoCan(list[i]) : '' });
-          if (i < 0) break;
-          const id = list[i], it = ITEMS[id] || GEAR[id];
-          const n = ITEMS[id] ? await this.choose([1, 3, 5, 10].map(k => ({ label: `${k} 個`, sub: it.price * k + ' G', disabled: S.gil < it.price * k })), { title: it.name, cls: 'small' }) : 0;
-          if (n < 0) continue;
-          const k = [1, 3, 5, 10][n]; S.gil -= it.price * k; addItem(S, id, k); this.G.audio.sfx('item'); this.toast(`買了 ${it.name} ×${k}`);
+          let sub = list;
+          if (list.length > 14 && groups.length > 1) {
+            const gsel = await this.choose(groups.map(g => ({ label: g, sub: list.filter(id => groupOf(id) === g).length + '' })), { title: `購買　<span class="gil">${S.gil} G</span>`, cls: 'small' });
+            if (gsel < 0) break;
+            sub = list.filter(id => groupOf(id) === groups[gsel]);
+          }
+          for (;;) {
+            const i = await this.choose(sub.map(id => { const it = ITEMS[id] || GEAR[id]; return { label: it.name + (GEAR[id]?.teach ? ' ✦' : ''), sub: it.price + ' G' + (S.items[id] ? `　持有${S.items[id]}` : ''), disabled: S.gil < it.price, desc: ITEMS[id]?.desc || this.gearKind(GEAR[id]) + '　' + this.gearLine(id) }; }), { title: `購買　<span class="gil">${S.gil} G</span>`, info: (i) => GEAR[sub[i]] ? this.gearHTML(sub[i]) + this.whoCan(sub[i]) : '' });
+            if (i < 0) break;
+            const id = sub[i], it = ITEMS[id] || GEAR[id];
+            const n = await this.choose([1, 3, 5, 10].map(k => ({ label: `${k} 個`, sub: it.price * k + ' G', disabled: S.gil < it.price * k })), { title: it.name, cls: 'small' });
+            if (n < 0) continue;
+            const k = [1, 3, 5, 10][n]; S.gil -= it.price * k; addItem(S, id, k); this.G.audio.sfx('item'); this.toast(`買了 ${it.name} ×${k}`);
+          }
+          if (!(list.length > 14 && groups.length > 1)) break;
         }
       } else {
         for (;;) {
-          const own = Object.keys(S.items).filter(id => S.items[id] > 0 && ((ITEMS[id] && (ITEMS[id].price || ITEMS[id].sell) && !ITEMS[id].key && id !== 'shard' && id !== 'stariron' && id !== 'tablet') || (GEAR[id] && GEAR[id].price)));
+          const own = Object.keys(S.items).filter(id => S.items[id] > 0 && ((ITEMS[id] && (ITEMS[id].price || ITEMS[id].sell) && !ITEMS[id].key && id !== 'shard' && id !== 'stariron' && id !== 'tablet') || (GEAR[id] && GEAR[id].price))).sort((a, b) => (ITEMS[a] ? 1 : 0) - (ITEMS[b] ? 1 : 0));
           if (!own.length) { this.toast('沒有可以賣的東西'); break; }
           const i = await this.choose(own.map(id => { const it = ITEMS[id] || GEAR[id]; return { label: it.name, sub: `${it.sell || Math.floor(it.price / 2)} G ×${S.items[id]}` }; }), { title: `出售　<span class="gil">${S.gil} G</span>` });
           if (i < 0) break;
@@ -296,8 +394,65 @@ export class UI {
       }
     }
   }
+  // magic shop: pay to teach a spell to one hero
+  async magicShop(spells, title = '魔法店') {
+    const S = this.S;
+    const schools = Object.keys(SCHOOL_N).filter(sc => spells.some(s => SKILLS[s].school === sc));
+    for (;;) {
+      const c = await this.choose(schools.map(sc => ({ label: SCHOOL_N[sc], sub: spells.filter(s => SKILLS[s].school === sc).length + ' 種' })), { title: `${title}　<span class="gil">${S.gil} G</span>`, cls: 'small' });
+      if (c < 0) return;
+      const list = spells.filter(s => SKILLS[s].school === schools[c]).sort((a, b) => SKILLS[a].tier - SKILLS[b].tier);
+      for (;;) {
+        const i = await this.choose(list.map(sp => ({ label: SKILLS[sp].name, sub: SKILLS[sp].price + ' G', disabled: S.gil < SKILLS[sp].price, desc: `MP ${SKILLS[sp].mp}　${SKILLS[sp].desc}` })), { title: `${SCHOOL_N[schools[c]]}　<span class="gil">${S.gil} G</span>`, info: (k) => `<div class="cmp">${Object.keys(S.heroes).map(id => `<div class="${S.heroes[id].spells?.includes(list[k]) ? 'dim' : ''}"><span>${HEROES[id].name}</span>${S.heroes[id].spells?.includes(list[k]) ? '已學會' : '魔力 ' + heroStats(S, id).mag}</div>`).join('')}</div>` });
+        if (i < 0) break;
+        const sp = list[i];
+        const who = Object.keys(S.heroes);
+        const j = await this.choose(who.map(id => ({ label: HEROES[id].name, sub: S.heroes[id].spells?.includes(sp) ? '已學會' : '魔力 ' + heroStats(S, id).mag, disabled: S.heroes[id].spells?.includes(sp), icon: portrait(id) })), { title: `誰要學「${SKILLS[sp].name}」？`, cls: 'small' });
+        if (j < 0) continue;
+        S.gil -= SKILLS[sp].price; S.heroes[who[j]].spells.push(sp); this.G.audio.sfx('levelup'); this.toast(`${HEROES[who[j]].name} 學會了「${SKILLS[sp].name}」！`);
+      }
+    }
+  }
+  // blacksmith: refine (+1..+5) and set elemental gems
+  async smith(maxTier = 7) {
+    const S = this.S;
+    const parse = (id) => { const m = /^(.+?)(?:\+(\d))?(?:@(\w+))?$/.exec(id); return { base: m[1], n: +(m[2] || 0), el: m[3] }; };
+    const make = (b, n, el) => b + (n ? '+' + n : '') + (el ? '@' + el : '');
+    // every piece you own, in the bag or worn
+    const owned = () => { const out = []; for (const id of Object.keys(S.items)) if (S.items[id] > 0 && GEAR[id] && GEAR[id].tier != null && GEAR[id].tier <= maxTier) out.push({ id, where: null }); for (const h of Object.keys(S.heroes)) for (const sl of EQUIP_SLOTS) { const g = S.heroes[h].equip[sl]; if (g && GEAR[g] && GEAR[g].tier != null) out.push({ id: g, where: [h, sl] }); } return out; };
+    const swap = (o, nid) => { if (o.where) S.heroes[o.where[0]].equip[o.where[1]] = nid; else { addItem(S, o.id, -1); if (S.items[o.id] <= 0) delete S.items[o.id]; addItem(S, nid, 1); } };
+    for (;;) {
+      const m = await this.choose([{ label: '強化裝備', sub: '+1～+5' }, { label: '鑲嵌寶石', sub: '屬性' }], { title: `鐵匠　<span class="gil">${S.gil} G</span>`, cls: 'small', info: '<p><b>強化</b>：用強化石把裝備強化到+5，每一級能力+8%。</p><p><b>鑲嵌</b>：用屬性寶石讓武器帶上屬性（打弱點用），或讓防具抵抗那個屬性。</p>' });
+      if (m < 0) return;
+      for (;;) {
+        const list = owned().filter(o => m === 0 ? parse(o.id).n < 5 : GEAR[o.id].slot !== 'acc');
+        if (!list.length) { this.toast('沒有可以處理的裝備'); break; }
+        const i = await this.choose(list.map(o => ({ label: GEAR[o.id].name, sub: o.where ? HEROES[o.where[0]].name + '裝備中' : '背包' })), { title: m === 0 ? '要強化哪一件？' : '要鑲嵌哪一件？', info: (k) => this.gearHTML(list[k].id) });
+        if (i < 0) break;
+        const o = list[i], P = parse(o.id), G = GEAR[o.id];
+        if (m === 0) {
+          const next = P.n + 1, cost = Math.round((G.price || 500) * 0.25 * next), stones = Object.keys(S.items).filter(x => ITEMS[x]?.refine >= next).sort((a, b) => ITEMS[a].refine - ITEMS[b].refine);
+          if (!stones.length) { this.toast(`需要能強化到+${next}的強化石`); continue; }
+          if (!await this.yesno(`把「${G.name}」強化到+${next}？\n需要 ${ITEMS[stones[0]].name} ×1 和 ${cost} G。`)) continue;
+          if (S.gil < cost) { this.toast('錢不夠'); continue; }
+          S.gil -= cost; addItem(S, stones[0], -1); if (S.items[stones[0]] <= 0) delete S.items[stones[0]];
+          swap(o, make(P.base, next, P.el)); this.G.audio.sfx('levelup'); this.toast(`${GEAR[make(P.base, next, P.el)].name} 完成！`);
+        } else {
+          const need = Math.floor((G.tier || 0) / 2) + 1;
+          const gems = Object.keys(S.items).filter(x => ITEMS[x]?.gem && ITEMS[x].tier + 1 >= need && S.items[x] > 0);
+          if (!gems.length) { this.toast(`需要${['一', '二', '三', '四'][need - 1]}級以上的屬性寶石`); continue; }
+          const j = await this.choose(gems.map(x => ({ label: ITEMS[x].name, sub: '×' + S.items[x] })), { title: '用哪一顆寶石？', cls: 'small' });
+          if (j < 0) continue;
+          const el = ITEMS[gems[j]].gem, cost = Math.round((G.price || 500) * 0.2);
+          if (S.gil < cost) { this.toast(`需要 ${cost} G`); continue; }
+          S.gil -= cost; addItem(S, gems[j], -1); if (S.items[gems[j]] <= 0) delete S.items[gems[j]];
+          swap(o, make(P.base, P.n, el)); this.G.audio.sfx('levelup'); this.toast(`${GEAR[make(P.base, P.n, el)].name} 完成！`);
+        }
+      }
+    }
+  }
   whoCan(g) { const S = this.S; return `<div class="cmp">${Object.keys(S.heroes).map(id => canEquip(id, g) ? `<div><span>${HEROES[id].name}</span>${this.compareShort(id, g)}</div>` : `<div class="dim"><span>${HEROES[id].name}</span>不能裝備</div>`).join('')}</div>`; }
-  compareShort(id, g) { const S = this.S, slot = GEAR[g].slot, b = heroStats(S, id); const h = S.heroes[id], old = h.equip[slot]; h.equip[slot] = g; const a = heroStats(S, id); h.equip[slot] = old; const k = slot === 'w' ? (GEAR[g].mag > GEAR[g].atk ? 'mag' : 'atk') : 'def'; const d = a[k] - b[k]; return `<b class="${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${({ atk: '攻', mag: '魔', def: '防' })[k]} ${d >= 0 ? '+' : ''}${d}</b>`; }
+  compareShort(id, g) { const S = this.S, G = GEAR[g], slot = G.slot === 'hand' ? (G.type === 'shield' ? 'L' : 'R') : G.slot === 'acc' ? 'acc1' : G.slot, b = heroStats(S, id); const a = this.tryOn(id, slot, g); const k = G.slot === 'hand' && G.type !== 'shield' ? (G.mag > G.atk ? 'mag' : 'atk') : 'def'; const d = a[k] - b[k]; return `<b class="${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${({ atk: '攻', mag: '魔', def: '防' })[k]} ${d >= 0 ? '+' : ''}${d}</b>`; }
   async inn(price) {
     const S = this.S;
     if (!await this.yesno(`住一晚要 ${price} G，要休息嗎？\n（持有 ${S.gil} G）`, '旅店老闆', 'innkeep')) return false;

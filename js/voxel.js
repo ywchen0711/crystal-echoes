@@ -224,6 +224,7 @@ function partsFor(s) {
   // weapon in the right hand (hand-local coordinates)
   const wp = s.weapon && weaponGrid(s.weapon);
   if (wp) P.weapon = wp;
+  if (s.weaponL) { const wl = weaponGrid(s.weaponL); if (wl) P.weaponL = wl; }
   if (s.shield) {
     const sh = new VGrid(), S = '#5a7ac8';
     sh.fill(2, 3, -11, 4, -6, 6, (x, y, z) => (y + 3.5) ** 2 / 64 + z * z / 40 <= 1 && (x === 2 || (y + 3.5) ** 2 / 64 + z * z / 40 <= 0.62), (x, y, z) => (y + 3.5) ** 2 / 64 + z * z / 40 > 0.7 ? gold : x === 3 ? shade(S, 0.12) : S);
@@ -269,12 +270,30 @@ function weaponGrid(kind) {
     for (let z = 0; z <= 7; z++) { g.set(0, 10 - Math.round(z * 0.3), z, gold); g.set(0, -2, z, shade(gold, -0.2)); }
     g.box(0, 0, -2, 8, 7, 7, gold);
     for (let z = 2; z <= 6; z += 2) g.box(0, 0, -1, 8, z, z, '#ffffff');
+  } else if (kind === 'greatsword') {
+    g.box(0, 0, 0, 0, -6, 0, '#4a2a1a'); g.box(-3, 3, -1, 1, 1, 1, gold);
+    g.box(0, 0, -2, 2, 2, 24, (x, y) => Math.abs(y) === 2 ? steelD : y === 0 ? '#e6ebf2' : steel); g.box(0, 0, -1, 1, 25, 26, steel);
+  } else if (kind === 'axe') {
+    g.box(0, 0, 0, 0, -3, 13, (x, y, z) => z % 4 === 0 ? woodL : wood);
+    g.fill(0, 0, -6, 4, 9, 15, (x, y, z) => y >= -5 + Math.abs(z - 12) * 0.6 && y <= 1 + Math.abs(z - 12) * 0.3 && y < 4, (x, y) => y <= -5 ? '#ffffff' : steel);
+  } else if (kind === 'hammer') {
+    g.box(0, 0, 0, 0, -3, 12, (x, y, z) => z % 4 === 0 ? woodL : wood);
+    g.box(-2, 2, -3, 3, 12, 16, (x, y, z) => z === 12 || z === 16 ? steelD : steel); g.box(-1, 1, -2, 2, 11, 11, gold);
+  } else if (kind === 'gun') {
+    g.box(0, 0, -2, 0, -3, 0, '#5a3a2a'); g.box(0, 0, 0, 1, 0, 14, (x, y, z) => y === 1 ? steelD : '#3a3a44'); g.box(0, 0, -1, -1, 2, 4, '#3a3a44'); g.set(0, 2, 13, gold);
+  } else if (kind === 'whip') {
+    g.box(0, 0, -1, 1, 0, 0, '#5a3a2a');
+    for (let i = 0; i < 22; i++) { const a = i * 0.45; g.set(Math.round(Math.sin(a) * 2), -2 - Math.round(i * 0.55), Math.round(Math.cos(a) * 2 + 2), i % 3 ? '#8a5a3a' : '#5a3a2a'); }
+  } else if (kind === 'boomerang') {
+    for (let i = 0; i <= 7; i++) { g.set(0, i, i + 1, i % 3 ? wood : '#d84a4a'); g.set(0, i, i + 2, woodL); g.set(0, -i + 7, i + 9, i % 3 ? wood : '#d84a4a'); g.set(0, -i + 7, i + 10, woodL); }
+  } else if (kind === 'tome') {
+    g.box(-3, 3, -2, 5, -1, 1, (x, y, z) => Math.abs(z) === 1 ? '#6a2a3a' : '#f4ecd8'); g.box(-1, 1, 1, 3, 2, 2, gold);
   } else return null;
   return g;
 }
 
 // per-weapon resting angle in the hand (positive tips the business end down)
-const WPN_TILT = { sword: 1.0, katana: 1.0, dagger: 1.1, wrench: 1.0, staff: 0, rod: 0, spear: 0, bow: 0, harp: 0.2 };
+const WPN_TILT = { sword: 1.0, katana: 1.0, dagger: 1.1, wrench: 1.0, staff: 0, rod: 0, spear: 0, bow: 0, harp: 0.2, greatsword: 0.6, axe: -0.9, hammer: -0.9, gun: 0.3, whip: 0, boomerang: 0.4, tome: 0.6 };
 
 const geoCache = new Map();
 function geometriesFor(look) {
@@ -319,6 +338,7 @@ export class VoxelPerson {
     this.armR = part(G.arm, this.torso, -8, 12, 0);
     if (G.cape) this.cape = part(G.cape, this.torso, 0, 12.5, -4.5);
     if (G.weapon) { this.weapon = part(G.weapon, this.armR, 0, -10, 0.5); this.weapon.rotation.x = WPN_TILT[look.weapon] ?? 0.8; }
+    if (G.weaponL) { this.weaponL = part(G.weaponL, this.armL, 0, -10, 0.5); this.weaponL.rotation.x = WPN_TILT[look.weaponL] ?? 0.8; }
     if (G.shield) part(G.shield, this.armL, 0, 0, 0);
     this.w = 0.7 * this.scale; this.h = 46 * VS * this.scale;
     this.frame = 0; this.t = Math.random() * 10;

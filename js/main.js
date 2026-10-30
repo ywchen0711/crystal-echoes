@@ -9,7 +9,8 @@ import { Input } from './input.js';
 import { makeStory } from './story.js';
 import { MAPS } from './maps.js';
 import { HEROES, ITEMS } from './data.js';
-import { newState, addHero, addItem, itemName, healAll, heroStats } from './party.js';
+import './content.js';
+import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx } from './party.js';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -182,6 +183,7 @@ class Game {
     if (o.cond && !this.cond(o.cond)) return;
     this.busy = true;
     if (!o.quiet) { if (o.door) this.audio.sfx('door'); await this.ui.fade(1, 300); }
+    if (this.field.world && to !== 'world' && this.field.player) this.S.lastWorld = { x: Math.floor(this.field.player.x), z: Math.floor(this.field.player.z) };
     const mount = to === 'world' ? (o.airship ? 'airship' : null) : null;
     this.field.load(to, x, z, dir, { mount });
     this.field.player.root.visible = true;
@@ -282,10 +284,11 @@ class Game {
   save() { try { this.S.map = this.field.mapId; this.S.x = Math.floor(this.field.player.x); this.S.z = Math.floor(this.field.player.z); this.S.dir = this.field.player.dir; this.S.mount = this.field.mount; localStorage.setItem(SAVE_KEY, JSON.stringify(this.S)); return true; } catch (e) { return false; } }
   autosave() { if (this.S.flags.intro_done && (this.field.def.town || this.field.def.world || this.field.def.interior)) { try { this.save(); localStorage.setItem(SAVE_KEY + '-auto', '1'); } catch (e) { } } }
   hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+  partyFx(id) { return gearFx(this.S, id); }
   loadSave() {
     try {
       const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
-      const s = JSON.parse(raw); this.S = Object.assign(newState(), s); this.S.settings = Object.assign(newState().settings, s.settings || {});
+      const s = JSON.parse(raw); this.S = Object.assign(newState(), s); this.S.settings = Object.assign(newState().settings, s.settings || {}); migrate(this.S);
       this.applySettings();
       this.field.load(this.S.map, this.S.x, this.S.z, this.S.dir, { mount: this.S.mount });
       this.field.player.root.visible = true;

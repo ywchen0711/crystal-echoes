@@ -4,7 +4,8 @@ import { Sprite, Particles, skyDome, blobShadow } from './render.js';
 import { battleSheet, monsterPx, propPx, tileTex, texFrom, BPOSE } from './pixel.js';
 import { VoxelPerson, VoxelSprite } from './voxel.js';
 import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js';
-import { heroStats, skillsOf, weaponType, addItem, itemName } from './party.js';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP } from './party.js';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js';
 import { lookOf } from './field.js';
 
 const ENEMY_DMG = 1.55;
@@ -81,11 +82,19 @@ export class Battle {
     const slots = [[2.9, -1.9], [3.9, -0.65], [4.9, 0.6], [5.9, 1.85]];
     P.forEach((id, i) => {
       const h = this.S.heroes[id], st = heroStats(this.S, id);
-      const spr = new VoxelPerson(lookOf(id), { scale: 1.25, battle: true, angle: -Math.PI / 2 + 0.45, glow: 0.12 });
-      const u = { side: 'party', id, name: HEROES[id].name, hero: id, lv: h.lv, st, hp: Math.max(0, Math.min(h.hp, st.hp)), mp: Math.min(h.mp, st.mp), wpn: weaponType(this.S, id), on: h.on || [], echo: h.echo, limit: h.limit || 0, buffs: {}, status: {}, spr, home: slots[i], survived: false, color: HEROES[id].color, immune: h.equip.x === 'x_ribbon' };
+      const hs0 = hands(this.S, id), shield0 = shieldOf(this.S, id).length > 0;
+      const look = { ...lookOf(id), weapon: hs0[0].unarmed ? null : (WTYPES[hs0[0].type]?.model ?? null), weaponL: hs0[1] ? (WTYPES[hs0[1].type]?.model ?? null) : null, shield: shield0 };
+      const spr = new VoxelPerson(look, { scale: 1.25, battle: true, angle: -Math.PI / 2 + 0.45, glow: 0.12 });
+      const fx = gearFx(this.S, id), hs = hands(this.S, id), shields = shieldOf(this.S, id);
+      const u = { side: 'party', id, name: HEROES[id].name, hero: id, lv: h.lv, st, hp: Math.max(0, Math.min(h.hp, st.hp)), mp: Math.min(h.mp, st.mp), wpn: hs[0].type, hands: hs, fx, on: h.on || [], echo: h.echo, limit: h.limit || 0, buffs: {}, status: {}, spr, home: slots[i], survived: false, color: HEROES[id].color, immuneSet: new Set(fx.immune || []), block: Math.min(0.6, shields.reduce((a, g) => a + (g.fx?.block || 0), 0)), mblock: shields.reduce((a, g) => a + (g.fx?.mblock || 0), 0), barrier: {} };
+      if (fx.first >= 1 || (fx.first && Math.random() < fx.first)) u.firstStrike = true;
       u.alive = u.hp > 0;
       this.addSprite(u, slots[i][0], slots[i][1]);
       if (u.on.includes('p_autoprotect')) this.buff(u, { def: 2 }, true);
+      for (const a of fx.auto || []) { if (a === 'protect') this.buff(u, { def: 1 }, true); else if (a === 'shell') this.buff(u, { spr: 1 }, true); else if (a === 'regen') u.autoRegen = true; else u.status[a] = 99; }
+      for (const k in u.buffs) if (fx.auto?.includes(k === 'def' ? 'protect' : 'shell')) u.buffs[k].t = 99;
+      const meal = this.S.meal?.n > 0 ? this.S.meal.fx : null;
+      if (meal?.start) this.buff(u, meal.start, true); if (meal?.limit) u.limit = Math.min(100, u.limit + meal.limit); if (meal?.auto) u.autoRegen = true;
       this.units.push(u);
     });
     const n = troop.length;
@@ -98,7 +107,7 @@ export class Battle {
       const spr = new VoxelSprite(px, { scale });
       const st = { hp: E.hp, mp: 999, atk: E.atk, def: E.def, mag: E.mag, spr: E.spr, spd: E.spd };
       if (opts.hard) for (const k of ['hp', 'atk', 'def', 'mag', 'spr']) st[k] = Math.round(st[k] * opts.hard);
-      const u = { side: 'enemy', id: eid, E, name: E.name + (troop.filter(t => t === eid).length > 1 ? letters[count[eid] - 1] : ''), lv: E.lv, st, hp: st.hp, mp: 999, shield: E.shield, maxShield: E.shield, weak: E.weak, resist: E.resist || [], revealed: new Set(this.S.flags['seen_' + eid] || []), buffs: {}, status: {}, spr, alive: true, broken: false, brokenUntil: -1, boss: !!E.boss, home: eslots[i] };
+      const u = { side: 'enemy', fam: E.fam, traits: new Set(E.traits || []), barrier: {}, id: eid, E, name: E.name + (troop.filter(t => t === eid).length > 1 ? letters[count[eid] - 1] : ''), lv: E.lv, st, hp: st.hp, mp: 999, shield: E.shield, maxShield: E.shield, weak: E.weak, resist: E.resist || [], revealed: new Set(this.S.flags['seen_' + eid] || []), buffs: {}, status: {}, spr, alive: true, broken: false, brokenUntil: -1, boss: !!E.boss, home: eslots[i] };
       this.addSprite(u, eslots[i][0], eslots[i][1]);
       this.units.push(u);
     });
@@ -153,11 +162,11 @@ export class Battle {
     await wait(500);
   }
 
-  speedOf(u) { return u.st.spd * this.bmul(u, 'spd') * (u.status.slow ? 0.5 : 1); }
+  speedOf(u) { return u.st.spd * this.bmul(u, 'spd') * (u.status.slow ? 0.5 : 1) * (u.status.haste ? 1.5 : 1) * (this.zone?.haste && u.side === 'party' ? 1.3 : 1); }
   computeOrder(jitter = true) {
     const list = this.units.filter(u => u.alive && !(u.side === 'enemy' && u.brokenUntil >= this.round));
     if (this.summonU) list.push(this.summonU);
-    const sc = (u) => this.speedOf(u) * (jitter ? 0.85 + Math.random() * 0.3 : 1) + (u.on?.includes('p_first') && this.round === 1 ? 1000 : 0) + (u.jumping ? 2000 : 0) + (this.opts.preemptive && this.round === 1 && u.side === 'party' ? 500 : 0);
+    const sc = (u) => this.speedOf(u) * (jitter ? 0.85 + Math.random() * 0.3 : 1) + ((u.on?.includes('p_first') || u.firstStrike) && this.round === 1 ? 1000 : 0) + (u.jumping ? 2000 : 0) + (this.opts.preemptive && this.round === 1 && u.side === 'party' ? 500 : 0);
     return list.map(u => [u, sc(u)]).sort((a, b) => b[1] - a[1]).map(a => a[0]);
   }
   nextPreview() {
@@ -168,6 +177,8 @@ export class Battle {
   }
   async doRound() {
     this.queue = this.computeOrder();
+    this.firstInRound = this.queue[0];
+    for (const a of this.party) a.roundHp = a.hp;
     this.extraPending = false; this.extraUsed = false;
     this.ui.timeline();
     while (this.queue.length && !this.result) {
@@ -203,16 +214,27 @@ export class Battle {
     this.checkEnd();
   }
   async endRound() {
+    // delayed spells go off
+    for (const d of this.delayed || []) if (d.t.alive && d.u.alive !== false) { this.msg(SKILLS[d.sid].name + ' 爆發！'); await this.strike(d.u, d.t, { ...SKILLS[d.sid], delay: false }, [].concat(SKILLS[d.sid].el || []), { noCover: true }); await wait(200); }
+    this.delayed = [];
     for (const u of this.units.filter(u => u.alive)) {
       if (u.status.poison) { const d = Math.max(1, Math.round(u.st.hp * 0.07)); this.damage(u, d, { color: '#c86aff' }); u.status.poison--; if (!u.status.poison) delete u.status.poison; }
       if (u.status.regen) { this.heal(u, Math.round(u.st.hp * 0.08)); u.status.regen--; if (!u.status.regen) delete u.status.regen; }
-      if (u.on?.includes('p_regen') && u.alive) this.heal(u, Math.round(u.st.hp * 0.04), true);
-      for (const k of ['slow', 'silence', 'blind']) if (u.status[k]) { u.status[k]--; if (!u.status[k]) delete u.status[k]; }
+      if ((u.on?.includes('p_regen') || u.autoRegen) && u.alive) this.heal(u, Math.round(u.st.hp * 0.05), true);
+      if (u.fx?.mpregen && u.alive) u.mp = Math.min(u.st.mp, u.mp + Math.max(1, Math.round(u.st.mp * u.fx.mpregen)));
+      for (const k of ['slow', 'silence', 'blind', 'haste', 'stop', 'confuse', 'curse', 'reflect']) if (u.status[k] && u.status[k] < 90) { u.status[k]--; if (!u.status[k]) delete u.status[k]; }
+      if (u.status.doom) { u.status.doom--; if (u.status.doom <= 0) { delete u.status.doom; this.pop(u, '死亡宣告', '#b06aff', true); u.hp = 0; } else this.pop(u, '倒數 ' + u.status.doom, '#b06aff'); }
       for (const k in u.buffs) { u.buffs[k].t--; if (u.buffs[k].t <= 0) delete u.buffs[k]; }
+      for (const k in u.barrier || {}) if (--u.barrier[k] <= 0) delete u.barrier[k];
+      for (const k in u.extraWeak || {}) if (--u.extraWeak[k] <= 0) { delete u.extraWeak[k]; this.ui.refresh(); }
+      for (const k of ['noArmor', 'grounded', 'noResist']) if (u[k]) u[k]--;
+      if (u.mark && --u.mark.t <= 0) u.mark = null;
+      if (u.enchant && --u.enchant.t <= 0) u.enchant = null;
       if (u.taunt) u.taunt--;
-      u.defending = false;
+      u.defending = false; u.stance = null; u.parry = false;
       if (u.side === 'enemy' && u.broken && this.round >= u.brokenUntil) { u.broken = false; u.shield = u.maxShield; this.pop(u, '恢復', '#8ae0ff'); }
     }
+    if (this.zone && --this.zone.t <= 0) { this.msg('領域消失了'); this.zone = null; }
     this.checkDeaths();
     await wait(200);
   }
@@ -223,10 +245,17 @@ export class Battle {
 
   async turn(u) {
     if (u.side === 'summon') return this.summonTurn(u);
+    if (u.status.stop) { this.pop(u, '停止中', '#a0a0ff'); await wait(380); return; }
+    if (u.status.stun) { delete u.status.stun; this.pop(u, '暈眩中', '#ffd04a'); await wait(380); return; }
     if (u.status.sleep) {
       u.status.sleep--; this.pop(u, 'Zzz', '#c8c8ff'); await wait(450);
       if (u.status.sleep > 0 && Math.random() > 0.35) return; delete u.status.sleep; this.pop(u, '醒來了', '#fff');
       return;
+    }
+    if (u.status.confuse && Math.random() < 0.6) {
+      this.pop(u, '混亂中', '#ff8ad8'); await wait(300);
+      const pool = this.units.filter(x => x.alive && x !== u && !x.jumping); const t = pool[Math.random() * pool.length | 0]; if (!t) return;
+      await this.actorAnim(u, SKILLS.attack); await this.strike(u, t, { type: 'phys', pow: 1, anim: 'slash', tgt: 'enemy' }, [], { noCover: true, atk: u.st.atk }); this.checkDeaths(); await this.actorReturn(u); return;
     }
     if (u.side === 'party') return this.partyTurn(u, false);
     return this.enemyTurn(u);
@@ -245,21 +274,24 @@ export class Battle {
   }
   autoAction(u) {
     const foes = this.foes; const low = this.allies.find(a => a.hp < a.st.hp * 0.35);
-    const sk = skillsOf(this.S, u.hero), all = [...sk.own, ...sk.echo];
+    const sk = skillsOf(this.S, u.hero), all = [...sk.own, ...sk.echo, ...artsOf(this.S, u.hero), ...spellsOf(this.S, u.hero)];
+    const can = (s) => { const D = SKILLS[s]; return D && u.mp >= this.mpCost(u, D) && !(u.status.silence && (D.spell || ['mag', 'heal', 'debuff'].includes(D.type)) && !D.art); };
     const dead = this.party.find(p => !p.alive);
-    if (dead) { const rv = all.find(s => SKILLS[s].tgt === 'dead' && u.mp >= (SKILLS[s].mp || 0)); if (rv) return { kind: 'skill', skill: rv, targets: [dead] }; }
-    if (low) { const hs = all.find(s => SKILLS[s].type === 'heal' && SKILLS[s].tgt !== 'dead' && SKILLS[s].pow > 0 && u.mp >= (SKILLS[s].mp || 0) && !u.status.silence); if (hs) return { kind: 'skill', skill: hs, targets: SKILLS[hs].tgt === 'allies' ? this.allies : [low] }; }
+    if (dead) { const rv = all.find(s => SKILLS[s].tgt === 'dead' && can(s)); if (rv) return { kind: 'skill', skill: rv, targets: [dead] }; }
+    if (low) { const hs = all.filter(s => SKILLS[s].type === 'heal' && SKILLS[s].tgt !== 'dead' && (SKILLS[s].pow > 0 || SKILLS[s].full) && can(s)).sort((a, b) => (SKILLS[b].pow || 9) - (SKILLS[a].pow || 9))[0]; if (hs) return { kind: 'skill', skill: hs, targets: SKILLS[hs].tgt === 'allies' ? this.allies : [low] }; }
     if (u.limit >= 100) return { kind: 'limit' };
-    // pick a weakness we know
+    // pick the best known weakness hit
     let best = null, bs = 0;
     for (const e of foes) for (const s of ['attack', ...all]) {
-      const S = SKILLS[s]; if (!S || (S.type !== 'phys' && S.type !== 'mag')) continue; if ((S.mp || 0) > u.mp) continue; if (S.type === 'mag' && u.status.silence) continue; if (S.jump) continue;
-      const tags = this.tagsOf(u, S); const w = tags.some(t => e.weak.includes(t) && e.revealed.has(t));
-      const score = (S.pow || 1) * (S.hits || 1) * (w ? 2.2 : 1) * (S.tgt === 'enemies' ? Math.min(foes.length, 3) * 0.8 : 1) - (S.mp || 0) * 0.02;
-      if (score > bs) { bs = score; best = { kind: 'skill', skill: s, targets: S.tgt === 'enemies' ? foes : S.tgt === 'random' ? foes : [e] }; }
+      const S = SKILLS[s]; if (!S || (S.type !== 'phys' && S.type !== 'mag')) continue; if (s !== 'attack' && !can(s)) continue; if (S.jump || S.gravity || S.mpBurst || S.delay || S.recoil) continue;
+      const tags = s === 'attack' ? u.hands.flatMap(h => [...(WTYPES[h.type]?.tags || []), ...[].concat(h.fx.el || [])]) : this.tagsOf(u, S); const w = tags.some(t => (e.weak.includes(t) || e.extraWeak?.[t]) && e.revealed.has(t));
+      const pw = s === 'attack' ? u.hands.length * (u.hands[0].type === 'dagger' ? 1.2 : 1) * (['whip', 'boomerang'].includes(u.wpn) ? Math.min(foes.length, 3) * 0.6 : 1) : (S.pow || 1) * (S.hits || 1);
+      const score = pw * (w ? 2.2 : 1) * (S.tgt === 'enemies' ? Math.min(foes.length, 3) * 0.8 : 1) * (S.type === 'mag' ? u.st.mag / Math.max(1, u.st.atk) : 1) - (S.mp || 0) * 0.02;
+      if (score > bs) { bs = score; best = { kind: 'skill', skill: s, targets: S.tgt === 'enemies' || S.tgt === 'random' ? foes : [e] }; }
     }
     return best || { kind: 'skill', skill: 'attack', targets: [foes[0]] };
   }
+  mpCost(u, S) { return Math.round((S.mp || 0) * (1 - Math.min(0.6, u.fx?.mpcost || 0))); }
   async execute(u, a) {
     if (a.kind === 'skill') return this.useSkill(u, a.skill, a.targets);
     if (a.kind === 'limit') { u.limit = 0; const sk = HEROES[u.hero].limit; await this.ui.banner(SKILLS[sk].name, '極限技', u.color); return this.useSkill(u, sk, this.targetsFor(u, SKILLS[sk]), { limit: true }); }
@@ -272,6 +304,7 @@ export class Battle {
       this.msg('逃不掉！'); await wait(600); return;
     }
     if (a.kind === 'summon') return this.summon(u, a.sid);
+    if (a.kind === 'item' && a.scroll) return this.useItem(u, a.item, a.targets);
     if (a.kind === 'relay') {
       const t = a.targets[0]; this.msg(`${u.name} 把行動讓給了 ${t.name}！`); this.fx.emit({ x: t.x, y: 1.4, z: t.z, n: 30, color: '#ffe04a', speed: 2, up: 1, life: 0.8, size: 0.25 }); this.G.audio.sfx('buff'); await wait(500);
       this.queue.unshift(t); return;
@@ -289,130 +322,333 @@ export class Battle {
 
   tagsOf(u, S) {
     const t = [];
-    if (S.wpn) t.push(S.wpn); else if (S === SKILLS.attack && u.side === 'party') t.push(u.wpn);
+    const wt = S.art || S.wpn;
+    if (wt && WTYPES[wt]) t.push(...WTYPES[wt].tags); else if (S.wpn) t.push(S.wpn); else if (S === SKILLS.attack && u.side === 'party') t.push(...(WTYPES[u.wpn]?.tags || []));
     if (S.el) for (const e of [].concat(S.el)) t.push(e);
-    return t;
+    // the weapon's own element rides along with physical arts, and so does an enchantment
+    if (u.side === 'party' && S.type === 'phys') { const h = u.hands?.find(h => h.type === wt) || u.hands?.[0]; if (h?.fx?.el && (S.art || S.wpn)) t.push(...[].concat(h.fx.el)); if (u.enchant) t.push(u.enchant.el); }
+    return [...new Set(t)];
+  }
+  atkFor(u, type) { const h = u.hands?.find(h => h.type === type); return h ? h.atk : u.st.atk; }
+  addMastery(u, type, n) {
+    if (u.side !== 'party' || !type || type === 'knuckle' && u.hands?.[0]?.unarmed) return;
+    const h = this.S.heroes[u.hero]; h.mastery = h.mastery || {};
+    const before = MASTERY_AT.filter(m => (h.mastery[type] || 0) >= m).length;
+    h.mastery[type] = (h.mastery[type] || 0) + n;
+    const after = MASTERY_AT.filter(m => h.mastery[type] >= m).length;
+    if (after > before && ARTS_BY_TYPE[type]?.[after - 1]) this.pop(u, `${WPN[type]}熟練度提升！學會「${SKILLS[ARTS_BY_TYPE[type][after - 1]].name}」`, '#ffe04a', true);
+  }
+  elOf(t) { const known = t.weak.filter(w => ELS.includes(w) && t.revealed.has(w)); return known.length ? known[Math.random() * known.length | 0] : ELS[Math.random() * 8 | 0]; }
+
+  // ---------------------------------------------------------------- normal attack: every weapon plays differently
+  async weaponAttack(u, tgt, o = {}) {
+    if (!o.counter && !o.quiet) this.msg(u.hands.map(h => ICON[h.type] || '👊').join(' ') + ' 攻擊');
+    await this.actorAnim(u, SKILLS.attack);
+    let rounds = u.fx?.dbl && Math.random() < u.fx.dbl ? 2 : 1;
+    let total = 0;
+    for (let r = 0; r < rounds; r++) {
+      if (r === 1) this.pop(u, '連擊！', '#ffb04a');
+      for (const h of u.hands) {
+        if (!this.foes.length) break;
+        const t = tgt && tgt.alive ? tgt : this.foes[0];
+        const W = WTYPES[h.type];
+        this.addMastery(u, h.type, 1);
+        const mult = h.off ? (u.on.includes('p_twosword') ? 1 : 0.75) : 1;
+        if (h.type === 'harp') {
+          const a = this.allies[Math.random() * this.allies.length | 0], k = ['atk', 'def', 'mag', 'spr', 'spd'][Math.random() * 5 | 0];
+          this.effect('song', a, 'light', u); this.G.audio.sfx('buff'); this.buff(a, { [k]: 1 }); await wait(250); continue;
+        }
+        let tags = h.unarmed ? [] : [...W.tags, ...[].concat(h.fx.el || [])];
+        if (u.enchant) tags.push(u.enchant.el);
+        const S = { type: 'phys', pow: mult, anim: ['bow', 'gun'].includes(h.type) ? 'arrow' : h.type === 'spear' ? 'thrust' : 'slash', tgt: 'enemy' };
+        if (h.type === 'tome') { S.type = 'mag'; S.pow = 1.0 * mult; const el = this.elOf(t); tags = ['tome', el, ...[].concat(h.fx.el || [])]; S.anim = { fire: 'fire', ice: 'ice', thunder: 'thunder', water: 'water', wind: 'wind', earth: 'quake', light: 'holy', dark: 'dark' }[el]; }
+        const list = h.type === 'whip' || h.type === 'boomerang' ? this.foes : [t];
+        const pw = h.type === 'whip' ? 0.5 : h.type === 'boomerang' ? 0.65 : 1;
+        const hits = h.type === 'dagger' ? 2 : 1;
+        for (let k = 0; k < hits; k++) for (const x of list) total += await this.strike(u, x, { ...S, pow: S.pow * pw }, tags, { atk: h.atk, hand: h, fast: hits > 1 || list.length > 1 });
+        // weapon follow-ups
+        const other = this.foes.filter(f => f !== t);
+        if (h.type === 'greatsword' && other.length) total += await this.strike(u, other[Math.random() * other.length | 0], { ...S, pow: 0.6 * mult }, tags, { atk: h.atk, hand: h, fast: true });
+        if (h.type === 'spear' && other.length) total += await this.strike(u, other[Math.random() * other.length | 0], { ...S, pow: 0.5 * mult }, tags, { atk: h.atk, hand: h, fast: true });
+        if (h.type === 'staff') u.mp = Math.min(u.st.mp, u.mp + 3);
+        if (h.type === 'sword') u.parry = true;
+        if (h.type === 'katana') u.drawn = true;
+      }
+    }
+    if (total > 0 && !o.counter) u.limit = Math.min(100, u.limit + Math.round(6 * (1 + (u.fx?.limitup || 0))));
+    await wait(200); this.checkDeaths(); await this.actorReturn(u);
+    await this.afterAction(u);
+  }
+  async afterAction(u) {
+    if (this.counterQ) { const [c, tgt] = this.counterQ; this.counterQ = null; if (c.alive && tgt.alive) { this.pop(c, '反擊！', '#ffb04a'); if (c.side === 'party') await this.weaponAttack(c, tgt, { counter: true, quiet: true }); else await this.useSkill(c, 'attack', [tgt], { counter: true, quiet: true }); } }
   }
 
   // ---------------------------------------------------------------- the heart: using a skill
   async useSkill(u, sid, targets, o = {}) {
     const S = SKILLS[sid];
-    const isP = u.side === 'party' || u.side === 'summon';
-    if (S.mp && u.side === 'party') { if (u.mp < S.mp) { this.msg('MP不足！'); await wait(500); return; } u.mp -= S.mp; }
-    if (u.side === 'party' && (S.type === 'mag' || S.type === 'heal' || S.type === 'debuff') && u.status.silence && !o.limit && !o.res) { this.msg(`${u.name} 被沉默了！`); await wait(600); return; }
+    if (sid === 'attack' && u.side === 'party') return this.weaponAttack(u, targets[0], o);
+    const spellish = !S.art && (S.spell || ['mag', 'heal', 'debuff'].includes(S.type));
+    if (u.side === 'party' && !o.scroll) {
+      const cost = this.mpCost(u, S);
+      if (u.mp < cost) { this.msg('MP不足！'); await wait(500); return; }
+      if (spellish && u.status.silence && !o.limit && !o.res) { this.msg(`${u.name} 被沉默了！`); await wait(600); return; }
+      u.mp -= cost;
+      if (S.hpCost) u.hp = Math.max(1, Math.round(u.hp - u.st.hp * S.hpCost));
+    }
     if (sid !== 'attack' && !o.quiet) this.msg(S.name);
+    if (u.side === 'party' && S.art) this.addMastery(u, S.art, 1);
     // jumps leave the field until the next round
     if (S.jump && !o.landing) {
       u.jumping = { skill: sid, target: targets[0] }; this.G.audio.sfx('jump');
       let t = 0; while (t < 0.4) { t += await this.G.frame(); u.oy = t * 40; } u.oy = 40;
       return;
     }
-    if (o.landing) { let t = 0; const tx = targets[0].x + 0.8, tz = targets[0].z; u.ox = tx - u.x; while (t < 0.3) { t += await this.G.frame(); u.oy = 40 * (1 - t / 0.3); } u.oy = 0; }
-    // actor animation
+    if (o.landing) { let t = 0; const tx = targets[0].x + 0.8; u.ox = tx - u.x; while (t < 0.3) { t += await this.G.frame(); u.oy = 40 * (1 - t / 0.3); } u.oy = 0; if (S.tgt === 'enemies') targets = this.foes; }
     await this.actorAnim(u, S);
-    const physLike = S.type === 'phys';
+    // things that happen once, to the user
+    if (S.stance) { u.stance = S.stance; this.pop(u, { parry: '招架架式', counter: '明鏡止水', cover: '掩護', wall: '鐵壁' }[S.stance], '#8ac8ff'); }
+    if (S.amp) { u.amp = S.amp; this.pop(u, '魔力增幅', '#c8a0ff'); }
+    if (S.dualNext) { u.dualNext = true; this.pop(u, '雙重詠唱準備', '#c8a0ff'); }
+    if (S.field) { this.zone = S.field === 'haste' ? { haste: true, t: 3 } : { el: S.field, t: 3 }; this.banner2(S.field === 'haste' ? '加速陣' : ELEM[S.field] + '之領域'); }
+    if (S.flee100) { if (this.units.some(x => x.boss) || this.opts.noFlee) { this.msg('無法逃走！'); } else { this.msg('瞬間移動！'); await wait(400); this.result = 'flee'; return; } }
+    if (S.dropUp) { this.dropBonus = (this.dropBonus || 0) + 0.5; this.pop(u, '掉寶率提升', '#ffe04a'); }
+    if (S.hp2mp) { const c = Math.round(u.st.hp * 0.25); if (u.hp > c) { u.hp -= c; u.mp = Math.min(u.st.mp, u.mp + c); this.number(u, c, '#8ac8ff', {}); } }
+    if (S.recoil) { }
     const hits = S.hits || 1;
     let total = 0;
-    const doHit = async (tgt, k, last) => {
-      if (!tgt || (!tgt.alive && S.tgt !== 'dead')) return;
+    const amp = !S.art && S.type === 'mag' && u.amp ? u.amp : 1; if (amp > 1) u.amp = 0;
+    const doHit = async (tgt, k) => {
+      if (!tgt || (!tgt.alive && S.tgt !== 'dead' && !S.revive)) return;
       if (S.type === 'phys' || S.type === 'mag') {
         const els = S.el ? [].concat(S.el) : [];
-        const el = hits > 1 && els.length > 1 ? [els[k % els.length]] : els;
-        const tags = [...(S.wpn ? [S.wpn] : sid === 'attack' && u.side === 'party' ? [u.wpn] : []), ...el];
-        this.effect(S.anim, tgt, el[0] || S.wpn || 'sword', u);
-        await wait(hits > 2 ? 110 : 180);
-        const r = this.calc(u, tgt, S, tags, o);
-        if (r.miss) { this.pop(tgt, 'MISS', '#c8c8c8'); return; }
-        this.damage(tgt, r.dmg, { weak: r.weak, crit: r.crit, resist: r.resist });
-        total += r.dmg;
-        if (S.drain) this.heal(u, Math.round(r.dmg * 0.5));
-        if (r.weak && tgt.side === 'enemy') await this.breakHit(tgt, 1 + (S.brk || 0) + (u.on?.includes('p_breaker') ? 1 : 0));
-        if (S.status && tgt.alive) this.inflict(tgt, S.status, S.chance || 0.4);
-        if (S.debuff && tgt.alive) this.buff(tgt, Object.fromEntries(Object.entries(S.debuff).map(([k, v]) => [k, -v])));
+        let el = hits > 1 && els.length > 1 ? [els[k % els.length]] : els;
+        if (S.weakEl) el = [this.elOf(tgt)];
+        if (S.randEl) el = [ELS[Math.random() * 8 | 0]];
+        const tags = [...this.tagsOf(u, { ...S, el: undefined }), ...el];
+        if (S.gravity) { this.effect('dark', tgt, 'dark', u); await wait(180); const d = Math.max(1, Math.round(tgt.hp * S.gravity * (tgt.boss ? 0.3 : 1))); this.damage(tgt, d, {}); total += d; return; }
+        if (S.osmose) { this.effect('dark', tgt, 'dark', u); await wait(150); const r = this.calc(u, tgt, S, tags, {}); const m = Math.min(tgt.mp ?? 0, Math.max(5, Math.round(r.dmg * 0.25))); if (tgt.side === 'enemy') { u.mp = Math.min(u.st.mp, u.mp + m); this.number(u, m, '#8ac8ff', {}); } else { tgt.mp = Math.max(0, tgt.mp - m); } return; }
+        if (S.delay) { (this.delayed = this.delayed || []).push({ u, t: tgt, sid }); this.effect('scan', tgt, el[0], u); this.pop(tgt, '設下時限', '#ffb04a'); return; }
+        let pow = (S.pow || 1) * amp;
+        if (S.mpBurst) { pow = 0.8 + u.mp / 30; u.mp = 0; }
+        if (S.burst) { const n = Object.keys(tgt.status).filter(k => !['regen', 'haste', 'reflect', 'reraise'].includes(k)).length + Object.values(tgt.buffs).filter(b => b.v < 0).length; pow *= 1 + 0.6 * n; if (n) { this.pop(tgt, `引爆 ×${n}`, '#ff8a3a'); tgt.status = {}; for (const b in tgt.buffs) if (tgt.buffs[b].v < 0) delete tgt.buffs[b]; } }
+        const dmg = await this.strike(u, tgt, { ...S, pow }, tags, { atk: S.byDef ? undefined : (S.art ? this.atkFor(u, S.art) : undefined), fast: hits > 2 });
+        total += dmg;
+        // chains bounce to other enemies
+        if (S.chain && dmg > 0) { let p2 = pow; for (let c = 0; c < S.chain; c++) { const pool = this.targetsFor(u, S).filter(x => x.alive); if (!pool.length) break; p2 *= 0.8; await this.strike(u, pool[Math.random() * pool.length | 0], { ...S, pow: p2 }, tags, { fast: true }); } }
+        if (S.pierce2) { const o2 = this.targetsFor(u, S).filter(x => x.alive && x !== tgt); if (o2.length) await this.strike(u, o2[Math.random() * o2.length | 0], { ...S, pow: pow * 0.5 }, tags, { atk: S.art ? this.atkFor(u, S.art) : undefined, fast: true }); }
+        if (tgt.alive && S.status) this.inflict(tgt, S.status, S.chance || 0.4);
+        if (tgt.alive && S.debuff) this.buff(tgt, Object.fromEntries(Object.entries(S.debuff).map(([k, v]) => [k, -v])));
+        if (S.mark) { tgt.mark = { el: S.mark, t: 3 }; this.pop(tgt, ELEM[S.mark] + '之印', ELEM_COLOR[S.mark]); }
         if (S.steal && tgt.side === 'enemy') this.steal(u, tgt);
-        if (tgt.status.sleep && tgt.alive && Math.random() < 0.5) delete tgt.status.sleep;
-        if (tgt.side === 'party' && tgt.alive && physLike && tgt.on.includes('p_counter') && Math.random() < 0.35 && !o.counter) this.counterQ = [tgt, u];
+        if (S.dispel) this.dispel(tgt);
+        if (S.delayT) this.delayTurn(tgt);
+        if (S.chip && tgt.side === 'enemy' && tgt.alive) await this.breakHit(tgt, S.chip);
+        if (S.unarmor && tgt.traits?.has('armor')) { tgt.noArmor = 3; this.pop(tgt, '重甲粉碎！', '#ffb04a'); }
+        if (S.ground && tgt.traits?.has('fly')) { tgt.grounded = 2; this.pop(tgt, '墜落！', '#ffb04a'); }
+        if (S.reveal) this.revealOne(tgt);
+        if (S.mpGain) u.mp = Math.min(u.st.mp, u.mp + S.mpGain);
+        if (S.gilToss) { }
       } else if (S.type === 'heal') {
-        this.effect(S.anim, tgt, 'light', u); await wait(150);
+        this.effect(S.anim || 'heal', tgt, 'light', u); await wait(150);
         if (S.revive || S.tgt === 'dead') { if (!tgt.alive) { tgt.alive = true; tgt.hp = Math.max(1, Math.round(tgt.st.hp * (S.revive || 0.3))); tgt.spr.setFrame(BPOSE.idle); this.pop(tgt, '復活', '#fff4b0'); } }
         if (!tgt.alive) return;
+        const hb = (u.on?.includes('p_healup') ? 1.25 : 1) * (1 + (u.fx?.healup || 0)) * (u.hands?.some(h => h.type === 'staff') ? 1.3 : 1);
         if (S.full) this.heal(tgt, tgt.st.hp);
-        else if (S.pow || S.base) { let h = (u.st.mag * this.bmul(u, 'mag') * (S.pow || 0) + (S.base || 0)) * (0.95 + Math.random() * 0.1); if (u.on?.includes('p_healup')) h *= 1.25; this.heal(tgt, Math.round(h)); }
-        if (S.cure) { for (const k of ['poison', 'sleep', 'silence', 'blind', 'slow']) delete tgt.status[k]; }
+        else if (S.pow || S.base) this.heal(tgt, Math.round((u.st.mag * this.bmul(u, 'mag') * (S.pow || 0) + (S.base || 0)) * (0.95 + Math.random() * 0.1) * hb));
+        if (S.healP) this.heal(tgt, Math.round(tgt.st.hp * S.healP));
+        if (S.cure) { for (const k of ['poison', 'sleep', 'silence', 'blind', 'slow', 'stun', 'stop', 'doom', 'confuse', 'curse']) delete tgt.status[k]; }
+        if (S.cureOnly) { for (const k of S.cureOnly) delete tgt.status[k]; this.pop(tgt, '恢復了', '#fff'); }
+        if (S.regenAdd) tgt.status.regen = S.regenAdd;
+        if (S.rewind) { if (tgt.roundHp > tgt.hp) this.heal(tgt, tgt.roundHp - tgt.hp); for (const k of ['poison', 'sleep', 'silence', 'blind', 'slow', 'stun', 'confuse', 'curse']) delete tgt.status[k]; }
+        if (S.mpHeal) { const m = Math.min(u.mp, Math.round(u.st.mp * S.mpHeal)); u.mp -= m; tgt.mp = Math.min(tgt.st.mp, tgt.mp + m); this.number(tgt, m, '#8ac8ff', {}); }
+        if (S.mpHealFlat) { const b = tgt.mp; tgt.mp = Math.min(tgt.st.mp, tgt.mp + S.mpHealFlat); this.number(tgt, tgt.mp - b, '#8ac8ff', {}); }
+        if (S.sacrifice && tgt !== u) { this.heal(tgt, Math.round(this._sac / Math.max(1, this.allies.length - 1))); }
         if (S.buff) this.buff(tgt, S.buff);
       } else if (S.type === 'buff') {
-        this.effect(S.anim, tgt, 'light', u); await wait(120);
+        this.effect(S.anim || 'buff', tgt, 'light', u); await wait(120);
         if (S.buff) this.buff(tgt, S.buff);
         if (S.regen) tgt.status.regen = S.regen;
         if (S.taunt) { tgt.taunt = S.taunt; this.pop(tgt, '挑釁', '#ffb04a'); }
         if (S.heal) this.heal(tgt, Math.round(tgt.st.hp * S.heal));
+        if (S.status && S.self) this.apply(tgt, S.status);
+        if (S.barrier) { tgt.barrier[S.barrier] = 4; this.pop(tgt, ELEM[S.barrier] + '護壁', ELEM_COLOR[S.barrier]); }
+        if (S.evadeT) { tgt.evadeT = S.evadeT; this.pop(tgt, '閃避提升', '#8affb0'); }
+        if (S.enchant) { const rod = u.hands?.find(h => h.type === 'rod'); const el = [].concat(rod?.fx?.el || [])[0] || 'fire'; tgt.enchant = { el, t: 3 }; this.pop(tgt, ELEM[el] + '附魔', ELEM_COLOR[el]); }
       } else if (S.type === 'debuff') {
-        this.effect(S.anim, tgt, S.el || 'dark', u); await wait(150);
-        if (S.pow) { const r = this.calc(u, tgt, { ...S, type: 'mag' }, S.el ? [S.el] : [], o); this.damage(tgt, r.dmg, { weak: r.weak }); if (r.weak && tgt.side === 'enemy') await this.breakHit(tgt, 1); }
+        this.effect(S.anim || 'dark', tgt, [].concat(S.el || 'dark')[0], u); await wait(150);
+        if (S.pow) { const r = this.calc(u, tgt, { ...S, type: 'mag' }, S.el ? [].concat(S.el) : [], o); if (!r.miss && !r.block) { this.damage(tgt, r.dmg, { weak: r.weak }); if (r.weak && tgt.side === 'enemy') await this.breakHit(tgt, 1); } }
         if (S.status && tgt.alive) this.inflict(tgt, S.status, S.chance || 0.5);
         if (S.debuff && tgt.alive) this.buff(tgt, Object.fromEntries(Object.entries(S.debuff).map(([k, v]) => [k, -v])));
+        if (S.dispel) this.dispel(tgt);
+        if (S.delayT) this.delayTurn(tgt);
+        if (S.addWeak && tgt.side === 'enemy') { tgt.extraWeak = tgt.extraWeak || {}; tgt.extraWeak[S.addWeak] = 3; tgt.revealed.add(S.addWeak); this.pop(tgt, `弱${ELEM[S.addWeak]}！`, ELEM_COLOR[S.addWeak]); }
+        if (S.unresist) { tgt.noResist = 3; tgt.noArmor = 3; this.pop(tgt, '抗性消失', '#ffb04a'); }
       } else if (S.type === 'special') {
         if (S.analyze) { for (const w of tgt.weak) tgt.revealed.add(w); this.remember(tgt); this.pop(tgt, '弱點看穿！', '#ffe04a'); this.G.audio.sfx('scan'); this.effect('scan', tgt, 'light', u); }
         if (S.steal) { this.effect('slash', tgt, 'dagger', u); this.steal(u, tgt); }
         if (S.charge) { u.charged = true; this.pop(u, '蓄力中…', '#ff6a6a'); this.effect('buff', u, 'fire', u); }
         if (S.stealGil) { const g = Math.min(this.S.gil, 20 + Math.floor(Math.random() * 40)); this.S.gil -= g; this.pop(tgt, `被偷了 ${g}G`, '#ffe04a'); }
         if (S.flee) { this.pop(u, '逃走了', '#fff'); u.alive = false; u.fled = true; this.fadeOut(u); }
+        if (S.chip && tgt.side === 'enemy') { this.effect('laser', tgt, 'light', u); await this.breakHit(tgt, S.chip); }
+        if (S.quick) { this.pop(tgt, '迅捷！', '#ffe04a'); this.queue.unshift(tgt); }
+        if (S.gilToss) { const cost = Math.min(this.S.gil, (u.lv || 10) * 50); this.S.gil -= cost; this.effect('light', tgt, 'light', u); this.damage(tgt, Math.round(cost * 0.8 / Math.max(1, targets.length)) + 1, {}); }
         await wait(300);
       }
       this.ui.refresh();
     };
+    if (S.sacrifice) { this._sac = u.hp - 1; u.hp = 1; this.number(u, this._sac, '#ff8a8a', {}); }
     if (S.tgt === 'random') {
-      for (let k = 0; k < hits; k++) { const pool = this.targetsFor(u, S).filter(t => t.alive); if (!pool.length) break; await doHit(pool[Math.random() * pool.length | 0], k, k === hits - 1); }
+      for (let k = 0; k < hits; k++) { const pool = this.targetsFor(u, S).filter(t => t.alive); if (!pool.length) break; await doHit(pool[Math.random() * pool.length | 0], k); }
     } else {
       for (let k = 0; k < hits; k++) {
-        const list = targets.filter(t => t && (t.alive || S.tgt === 'dead'));
+        const list = targets.filter(t => t && (t.alive || S.tgt === 'dead' || S.revive));
         if (!list.length && S.tgt === 'enemy') { const alt = this.targetsFor(u, S)[0]; if (alt) list.push(alt); }
-        if (S.tgt === 'enemies' || S.tgt === 'allies') { for (const t of list) doHit(t, k, k === hits - 1); await wait(260); }
-        else for (const t of list) await doHit(t, k, k === hits - 1);
+        if (S.tgt === 'enemies' || S.tgt === 'allies') { await Promise.all(list.map(t => doHit(t, k))); await wait(120); }
+        else for (const t of list) await doHit(t, k);
       }
     }
     if (S.type === 'phys' && S.buff) this.buff(u, S.buff);
-    if (u.charged && (S.type === 'phys' || S.type === 'mag')) u.charged = false;
-    // limit gauge
-    if (u.side === 'party' && total > 0 && !o.limit) u.limit = Math.min(100, u.limit + 6);
-    await wait(260);
+    if (S.recoil && u.alive) { const d = Math.round(u.st.hp * S.recoil); this.damage(u, Math.min(d, u.hp - 1), { color: '#ff8a8a' }); }
+    if (u.charged && (S.type === 'phys' || S.type === 'mag') && !S.charge) u.charged = false;
+    if (S.art === 'katana' || (S.wpn === 'katana' && S.type === 'phys')) u.drawn = true;
+    if (u.side === 'party' && total > 0 && !o.limit) u.limit = Math.min(100, u.limit + Math.round(6 * (1 + (u.fx?.limitup || 0))));
+    await wait(220);
     this.checkDeaths();
     await this.actorReturn(u);
-    // dual cast
-    if (u.side === 'party' && S.type === 'mag' && u.on.includes('p_dualcast') && !o.dual && !o.limit && !o.res && Math.random() < 0.4 && this.foes.length) {
-      this.pop(u, '連續詠唱！', '#c8a0ff'); await wait(300);
-      if (S.mp) u.mp += S.mp;
-      await this.useSkill(u, sid, S.tgt === 'enemy' ? [targets[0]?.alive ? targets[0] : this.foes[0]] : this.targetsFor(u, S), { ...o, dual: true });
+    // dual cast (passive) and double cast (rod art)
+    const isSpell = !S.art && S.type === 'mag';
+    if (u.side === 'party' && isSpell && !o.dual && !o.limit && !o.res && this.foes.length && (u.dualNext || (u.on.includes('p_dualcast') && Math.random() < 0.4))) {
+      u.dualNext = false; this.pop(u, '連續詠唱！', '#c8a0ff'); await wait(300);
+      await this.useSkill(u, sid, S.tgt === 'enemy' ? [targets[0]?.alive ? targets[0] : this.foes[0]] : this.targetsFor(u, S), { ...o, dual: true, scroll: true });
     }
-    if (this.counterQ) { const [c, tgt] = this.counterQ; this.counterQ = null; if (c.alive && tgt.alive) { this.pop(c, '反擊！', '#ffb04a'); await this.useSkill(c, 'attack', [tgt], { counter: true, quiet: true }); } }
+    await this.afterAction(u);
     // second action for bosses
-    if (u.side === 'enemy' && u.E.twice && !o.second && Math.random() < u.E.twice && u.alive && !u.broken && this.allies.length) { await wait(250); await this.enemyTurn(u, true); }
+    if (u.side === 'enemy' && u.E.twice && !o.second && Math.random() < u.E.twice && u.alive && !u.broken && !u.status.stop && this.allies.length) { await wait(250); await this.enemyTurn(u, true); }
+  }
+  banner2(t) { this.msg(t); this.flash('#ffffff', 0.2); }
+  dispel(t) { let n = 0; for (const k in t.buffs) if (t.buffs[k].v > 0) { delete t.buffs[k]; n++; } for (const k of ['haste', 'regen', 'reflect', 'reraise']) if (t.status[k]) { delete t.status[k]; n++; } if (n) this.pop(t, '強化消失', '#c8c8c8'); }
+  delayTurn(t) { const i = (this.queue || []).indexOf(t); if (i >= 0) { this.queue.splice(i, 1); this.queue.push(t); this.pop(t, '行動延後', '#a0a0ff'); this.ui.timeline(); } }
+  revealOne(t) { if (t.side !== 'enemy') return; const w = t.weak.find(x => !t.revealed.has(x)); if (w) { t.revealed.add(w); this.remember(t); this.pop(t, `發現弱點 ${ICON[w] || ''}`, '#ffe04a'); this.ui.refresh(); } }
+
+  // one hit landing on one target: cover, reflect, evasion, block, damage and every on-hit effect
+  async strike(u, tgt, S, tags, ctx = {}) {
+    if (!tgt || !tgt.alive) return 0;
+    if (tgt.side === 'party' && u.side === 'enemy' && S.tgt !== 'enemies' && S.tgt !== 'random' && !ctx.noCover) {
+      const g = this.allies.find(a => a !== tgt && !a.jumping && (a.stance === 'cover' || (a.fx?.cover && tgt.hp < tgt.st.hp * 0.3 && a.hp > a.st.hp * 0.5)));
+      if (g) { this.pop(g, '掩護！', '#8ac8ff'); tgt = g; }
+    }
+    if (S.type === 'mag' && tgt.status.reflect && (S.tgt === 'enemy' || S.tgt === 'ally') && !ctx.reflected) {
+      this.pop(tgt, '反射', '#c8e8ff'); const pool = (u.side === 'enemy' ? this.foes : this.allies).filter(x => x.alive && !x.jumping);
+      if (pool.length) { tgt = pool[Math.random() * pool.length | 0]; ctx = { ...ctx, reflected: true }; }
+    }
+    const elTag = tags.find(t => ELEM[t]);
+    this.effect(S.anim || 'slash', tgt, elTag || tags[0] || 'sword', u);
+    await wait(ctx.fast ? 100 : 170);
+    if (!tgt.alive) return 0;
+    const r = this.calc(u, tgt, S, tags, ctx);
+    if (r.miss) { this.pop(tgt, r.evade ? '閃避' : r.immune ? '無效' : 'MISS', '#c8c8c8'); this.G.audio.sfx('miss'); return 0; }
+    if (r.block) {
+      this.pop(tgt, '格擋', '#8ac8ff'); this.G.audio.sfx('guard');
+      if ((tgt.stance === 'wall' || tgt.parry) && S.type === 'phys' && u.alive && !ctx.counter) this.counterQ = [tgt, u];
+      return 0;
+    }
+    if (r.absorb) { this.heal(tgt, r.dmg); this.pop(tgt, '吸收', '#8affb0'); return 0; }
+    if (tgt.parry && S.type === 'phys' && u.side === 'enemy' && Math.random() < 0.3) { this.pop(tgt, '招架！', '#8ac8ff'); this.G.audio.sfx('guard'); this.counterQ = [tgt, u]; return 0; }
+    if (tgt.stance === 'parry' && S.type === 'phys' && u.side === 'enemy') { this.pop(tgt, '招架！', '#8ac8ff'); this.G.audio.sfx('guard'); this.counterQ = [tgt, u]; return 0; }
+    this.damage(tgt, r.dmg, { weak: r.weak, crit: r.crit, resist: r.resist });
+    const hand = ctx.hand;
+    // breaking shields: weakness hits, or weapons / effects that crack them anyway
+    if (tgt.side === 'enemy') {
+      let n = 0;
+      if (r.weak) n = 1 + (S.brk || 0) + (u.on?.includes('p_breaker') ? 1 : 0) + (r.markHit ? 1 : 0) + (S.type === 'mag' && !S.art && u.hands?.some(h => h.type === 'rod') && tags.some(t => ELEM[t]) ? 1 : 0);
+      else if ((hand?.type === 'hammer' && Math.random() < 0.35) || (u.fx?.brk && Math.random() < u.fx.brk)) { n = 1; this.pop(tgt, '震擊', '#ffd04a'); }
+      if (r.markHit) tgt.mark = null;
+      if (n) await this.breakHit(tgt, n);
+    }
+    // weapon traits on hit
+    if (hand?.type === 'axe' && tgt.alive && S.type === 'phys') { this.buff(tgt, { def: -1 }, true); if (tgt.traits?.has('armor') && !tgt.noArmor) { tgt.noArmor = 2; this.pop(tgt, '破甲', '#ffb04a'); } }
+    if (hand?.type === 'knuckle' || S.art === 'knuckle') { u.combo = u.comboT === tgt ? Math.min(5, (u.combo || 0) + 1) : 0; u.comboT = tgt; if (u.combo) this.pop(u, `${u.combo + 1} COMBO`, '#ffb04a'); }
+    const onHit = { ...(hand?.fx?.onHit || {}), ...(S.type === 'phys' && !hand && S.art ? (u.hands?.find(h => h.type === S.art)?.fx?.onHit || {}) : {}) };
+    for (const [st, ch] of Object.entries(onHit)) if (tgt.alive) this.inflict(tgt, st, ch * (hand?.type === 'whip' || S.art === 'whip' ? 2 : 1), true);
+    if (u.side === 'party' && S.type === 'phys') {
+      if (u.fx?.drain) this.heal(u, Math.round(r.dmg * u.fx.drain), true);
+      if (u.fx?.mpdrain) u.mp = Math.min(u.st.mp, u.mp + Math.round(r.dmg * u.fx.mpdrain));
+    }
+    if (S.drain) this.heal(u, Math.round(r.dmg * 0.5));
+    if (tgt.side === 'party' && tgt.alive && S.type === 'phys' && u.alive && !ctx.counter && !['bow', 'gun'].includes(hand?.type)) {
+      if (tgt.fx?.thorns) { const d = Math.max(1, Math.round(r.dmg * tgt.fx.thorns)); this.damage(u, d, { color: '#ffb04a' }); }
+      const cc = (tgt.on.includes('p_counter') ? 0.35 : 0) + (tgt.fx?.counter || 0) + (tgt.stance === 'counter' ? 1 : 0);
+      if (Math.random() < cc) this.counterQ = [tgt, u];
+    }
+    return r.dmg;
   }
 
-  calc(u, t, S, tags, o) {
+  calc(u, t, S, tags, o = {}) {
     const phys = S.type === 'phys';
-    const A = phys ? u.st.atk * this.bmul(u, 'atk') : u.st.mag * this.bmul(u, 'mag');
-    const D = S.pierce ? 0 : phys ? t.st.def * this.bmul(t, 'def') : t.st.spr * this.bmul(t, 'spr');
-    if (phys && u.status.blind && Math.random() < 0.5) return { miss: true };
+    const hand = o.hand, wt = hand?.type || S.art || S.wpn;
+    const W = WTYPES[wt];
+    let A;
+    if (S.byDef) A = u.st.def * this.bmul(u, 'def') * 1.5;
+    else A = phys ? (o.atk ?? u.st.atk) * this.bmul(u, 'atk') : u.st.mag * this.bmul(u, 'mag');
+    const flying = t.traits?.has('fly') && !t.grounded;
+    if (flying && tags.includes('earth') && !phys) return { miss: true, immune: true };
+    if (phys) {
+      if (u.status.blind && Math.random() < 0.5) return { miss: true };
+      const sure = ['bow', 'gun'].includes(wt) || S.ranged;
+      const ev = (t.evadeT || 0) + (t.fx?.evade || 0) + (t.traits?.has('evade') ? 0.25 : 0) - (wt === 'dagger' ? 0.1 : 0);
+      if (t.evadeT) t.evadeT = 0;
+      if (!sure && wt === 'axe' && Math.random() < 0.1) return { miss: true };
+      if (!sure && Math.random() < ev) return { miss: true, evade: true };
+      if (t.side === 'party' && u.side !== 'party' && Math.random() < (t.stance === 'wall' ? 1 : t.block || 0)) return { block: true };
+    } else if (S.type === 'mag' && t.side === 'party' && u.side !== 'party' && t.mblock && Math.random() < t.mblock) return { block: true };
+    const armored = t.traits?.has('armor') && !t.noArmor;
+    let D = phys ? t.st.def * this.bmul(t, 'def') : t.st.spr * this.bmul(t, 'spr');
+    if (phys && armored && !['hammer', 'gun'].includes(wt)) D *= 1.6;
+    if (S.pierce || (phys && wt === 'gun')) D = 0;
+    if (S.ignoreDef) D *= 1 - S.ignoreDef;
     let dmg = A * (S.pow || 1) * 60 / (60 + D * 1.5);
     if (u.side === 'enemy') dmg *= ENEMY_DMG;
     if (u.side === 'summon') dmg *= 1.15;
-    const weak = t.side === 'enemy' ? tags.some(x => t.weak.includes(x)) : false;
-    const resist = !weak && t.side === 'enemy' && tags.length && tags.every(x => t.resist.includes(x));
-    if (weak) { dmg *= 1.5; for (const x of tags) if (t.weak.includes(x)) t.revealed.add(x); this.remember(t); }
+    const weakList = t.side === 'enemy' ? [...t.weak, ...Object.keys(t.extraWeak || {})] : [];
+    const weak = tags.some(x => weakList.includes(x));
+    const resist = !weak && t.side === 'enemy' && !t.noResist && tags.length && tags.every(x => t.resist.includes(x));
+    if (weak) { dmg *= 1.5; for (const x of tags) if (weakList.includes(x)) t.revealed.add(x); this.remember(t); }
     if (resist) dmg *= 0.5;
+    // party resistances, absorption and barriers
+    if (t.side === 'party') {
+      for (const e of tags) {
+        if (!ELEM[e]) continue;
+        const rv = t.fx?.resist?.[e];
+        if (rv != null) { if (rv < 0) return { dmg: Math.max(1, Math.round(dmg * -rv)), absorb: true }; dmg *= rv; }
+        if (t.barrier?.[e]) dmg *= 0.5;
+      }
+    }
+    // flying enemies dodge blades; bows and boomerangs pluck them out of the air
+    if (flying && phys) { if (W?.melee && !S.ranged) dmg *= 0.6; if (wt === 'bow') dmg *= 1.3; if (wt === 'boomerang') dmg *= 1.2; if (S.vsFly) dmg *= S.vsFly; }
+    if (armored && S.vsArmor) dmg *= S.vsArmor;
+    const helpless = t.broken || t.status.sleep || t.status.stun || t.status.stop;
+    if (S.vsHelpless && helpless) dmg *= S.vsHelpless;
+    else if (wt === 'dagger' && phys && helpless) dmg *= 1.5;
+    if (u.fx && t.fam) dmg *= Math.max(u.fx.slay?.[t.fam] || 1, hand?.fx?.slay?.[t.fam] || 1, flying ? (u.fx.slay?.flying || hand?.fx?.slay?.flying || 1) : 1);
+    if (this.zone?.el && tags.includes(this.zone.el)) dmg *= 1.4;
+    let markHit = false; if (t.mark && tags.includes(t.mark.el)) { dmg *= 1.5; markHit = true; }
     if (t.side === 'enemy' && t.broken) dmg *= 1.6;
     if (this.inExtra) dmg *= 1.3;
     if (u.charged) dmg *= 2.5;
     if (t.defending) dmg *= 0.5;
     if (u.on) { for (const [p, e] of [['p_fireup', 'fire'], ['p_thunderup', 'thunder'], ['p_windup', 'wind']]) if (u.on.includes(p) && tags.includes(e)) dmg *= 1.25; }
-    const critC = phys ? (u.on?.includes('p_crit') ? 0.15 : 0.05) : 0;
-    const crit = Math.random() < critC; if (crit) dmg *= 1.5;
+    if (!phys && !S.art && u.hands?.some(h => h.type === 'rod') && tags.some(x => ELEM[x])) dmg *= 1.2;
+    if (u.fx?.lowhp) dmg *= 1 + u.fx.lowhp * (1 - u.hp / u.st.hp);
+    if (wt === 'knuckle' && phys && u.comboT === t) dmg *= 1 + 0.2 * Math.min(5, (u.combo || 0) + 1);
+    let critC = phys && wt !== 'gun' ? (u.on?.includes('p_crit') ? 0.15 : 0.05) + (u.fx?.crit || 0) + (S.critUp || 0) : 0;
+    if (phys && wt === 'katana' && !u.drawn && u.side === 'party') critC = 1;
+    if (S.iai && this.firstInRound === u) critC = 1;
+    const crit = Math.random() < critC; if (crit) dmg *= wt === 'katana' ? 2 : 1.5;
     dmg *= 0.92 + Math.random() * 0.16;
-    return { dmg: Math.max(1, Math.min(99999, Math.round(dmg))), weak, crit, resist };
+    return { dmg: Math.max(1, Math.min(99999, Math.round(dmg))), weak, crit, resist, markHit };
   }
   remember(t) { if (t.side === 'enemy') this.S.flags['seen_' + t.id] = [...t.revealed]; }
-  bmul(u, k) { const b = u.buffs[k]; if (!b) return 1; return b.v > 0 ? 1 + b.v * 0.25 : 1 / (1 - b.v * 0.25); }
+  bmul(u, k) { const b = u.buffs[k]; const c = u.status?.curse ? 0.8 : 1; if (!b) return c; return c * (b.v > 0 ? 1 + b.v * 0.25 : 1 / (1 - b.v * 0.25)); }
   buff(u, o, quiet) {
     for (const k in o) {
       const cur = u.buffs[k]?.v || 0; const v = Math.max(-3, Math.min(3, cur + o[k]));
@@ -421,13 +657,16 @@ export class Battle {
     }
     this.ui.refresh();
   }
-  inflict(t, st, chance) {
-    if (t.immune) { this.pop(t, '無效', '#c8c8c8'); return; }
-    if (t.boss && (st === 'sleep')) chance *= 0.25;
+  inflict(t, st, chance, quiet) {
+    if (!t.alive) return;
+    if (t.immune || t.immuneSet?.has(st)) { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; }
+    if (t.boss) { if (st === 'doom') { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; } if (['sleep', 'stop', 'confuse', 'stun'].includes(st)) chance *= 0.25; }
     if (Math.random() > chance) return;
-    t.status[st] = st === 'sleep' ? 3 : 3;
-    this.pop(t, { poison: '中毒', sleep: '睡眠', silence: '沉默', blind: '失明', slow: '緩速' }[st], '#c86aff');
+    t.status[st] = { stop: 2, stun: 1, doom: 3, confuse: 2 }[st] || 3;
+    this.pop(t, STATUS_N[st], '#c86aff');
+    if (st === 'stop' || st === 'stun') this.ui.timeline();
   }
+  apply(t, st) { t.status[st] = st === 'reraise' ? 99 : st === 'haste' ? 4 : 3; this.pop(t, STATUS_N[st], '#8affb0'); }
   steal(u, t) {
     if (t.stolen) { this.pop(t, '已經沒東西了', '#c8c8c8'); return; }
     const d = t.E.drops?.find(d => !['shard', 'stariron'].includes(d[0]) && !d[0].startsWith('x_') && !d[0].startsWith('w_')) || ['potion'];
@@ -453,10 +692,13 @@ export class Battle {
   }
   damage(t, d, o = {}) {
     t.hp = Math.max(0, t.hp - d);
+    if (t.status.sleep && Math.random() < 0.5) delete t.status.sleep;
+    if (t.status.confuse && Math.random() < 0.3) delete t.status.confuse;
+    if (t.hp <= 0 && t.side === 'party' && t.fx?.survive && !t.survived2) { t.hp = 1; t.survived2 = true; this.pop(t, '不屈！', '#ffb04a'); }
     if (t.hp <= 0 && t.side === 'party' && t.on.includes('p_survive') && !t.survived) { t.hp = 1; t.survived = true; this.pop(t, '不屈！', '#ffb04a'); }
     this.number(t, d, o.weak ? '#ffe04a' : o.color || (t.side === 'party' ? '#ff8a8a' : '#ffffff'), o);
     t.flash = 1; t.shakeT = 0.3;
-    if (t.side === 'party') { t.limit = Math.min(100, t.limit + Math.round(d / t.st.hp * 70)); if (t.hp > 0) t.spr.setFrame(BPOSE.hurt); }
+    if (t.side === 'party') { t.limit = Math.min(100, t.limit + Math.round(d / t.st.hp * 70 * (1 + (t.fx?.limitup || 0)))); if (t.hp > 0) t.spr.setFrame(BPOSE.hurt); }
     this.G.audio.sfx(o.weak ? 'weak' : 'hit');
     if (t.hp <= 0) t.dying = true;
     this.ui.refresh();
@@ -464,6 +706,7 @@ export class Battle {
   heal(t, h, quiet) { if (!t.alive) return; const before = t.hp; t.hp = Math.min(t.st.hp, t.hp + h); if (!quiet || t.hp > before) this.number(t, t.hp - before, '#8affb0', {}); this.ui.refresh(); }
   checkDeaths() {
     for (const u of this.units) if (u.alive && u.hp <= 0) {
+      if (u.side === 'party' && u.status.reraise) { delete u.status.reraise; u.hp = Math.max(1, Math.round(u.st.hp * 0.2)); this.pop(u, '自動復活！', '#fff4b0'); this.effect('raise', u, 'light', u); continue; }
       u.alive = false; u.dying = false;
       if (u.side === 'enemy') { this.fadeOut(u); this.G.audio.sfx('kill'); }
       else { u.spr.setFrame(BPOSE.ko); u.buffs = {}; u.status = {}; u.jumping = null; u.oy = 0; }
@@ -544,16 +787,32 @@ export class Battle {
   // ---------------------------------------------------------------- items
   async useItem(u, id, targets) {
     const I = ITEMS[id]; this.S.items[id]--; if (!this.S.items[id]) delete this.S.items[id];
-    this.msg(I.name); u.spr.setFrame(BPOSE.item); await wait(300);
     const e = I.use;
+    if (e.cast) { this.msg(I.name); return this.useSkill(u, e.cast, targets, { scroll: true }); }
+    this.msg(I.name); u.spr.setFrame(BPOSE.item); await wait(300);
     if (e.escape) { if (this.units.some(x => x.boss) || this.opts.noFlee) { this.msg('無法逃走！'); await wait(500); return; } this.msg('成功逃走了！'); await wait(500); this.result = 'flee'; return; }
     for (const t of targets) {
       if (e.revive) { if (!t.alive) { t.alive = true; t.hp = Math.max(1, Math.round(t.st.hp * e.revive)); t.spr.setFrame(BPOSE.idle); this.pop(t, '復活', '#fff4b0'); this.effect('raise', t, 'light', u); } continue; }
       if (!t.alive) continue;
-      if (e.heal) { this.heal(t, e.heal); this.effect('heal', t, 'light', u); }
+      if (e.heal) { this.heal(t, Math.round(e.heal * (1 + (u.fx?.healup || 0) * 0.5))); this.effect('heal', t, 'light', u); }
       if (e.mp) { const b = t.mp; t.mp = Math.min(t.st.mp, t.mp + e.mp); this.number(t, t.mp - b, '#8ac8ff', {}); }
-      if (e.cure) { for (const k of ['poison', 'sleep', 'silence', 'blind', 'slow']) delete t.status[k]; this.pop(t, '恢復了', '#fff'); }
-      if (e.dmg) { this.effect(e.el === 'fire' ? 'explode' : e.el, t, e.el, u); const weak = t.weak?.includes(e.el); this.damage(t, Math.round(e.dmg * (weak ? 1.5 : 1) * (0.9 + Math.random() * 0.2)), { weak }); if (weak) { t.revealed.add(e.el); this.remember(t); await this.breakHit(t, 1); } }
+      if (e.cure) { for (const k of ['poison', 'sleep', 'silence', 'blind', 'slow', 'stun', 'stop', 'doom', 'confuse', 'curse']) delete t.status[k]; this.pop(t, '恢復了', '#fff'); }
+      if (e.cureOnly) { for (const k of e.cureOnly) delete t.status[k]; this.pop(t, '恢復了', '#fff'); }
+      if (e.buff) this.buff(t, e.buff);
+      if (e.status && e.self) this.apply(t, e.status);
+      else if (e.status) { this.effect('dark', t, 'dark', u); this.inflict(t, e.status, e.chance || 0.6); }
+      if (e.regen) t.status.regen = e.regen;
+      if (e.evadeT) { t.evadeT = e.evadeT; this.pop(t, '幻影', '#8affb0'); }
+      if (e.analyze) { for (const w of t.weak || []) t.revealed.add(w); this.remember(t); this.pop(t, '弱點看穿！', '#ffe04a'); this.G.audio.sfx('scan'); }
+      if (e.dmg) {
+        const tag = e.el || e.wpn; this.effect(e.el === 'fire' ? 'explode' : e.el ? ({ earth: 'quake', light: 'holy' }[e.el] || e.el) : 'slash', t, tag, u);
+        const weak = t.weak?.includes(tag) || !!t.extraWeak?.[tag];
+        let d = e.dmg * (weak ? 1.5 : 1) * (t.broken ? 1.6 : 1) * (0.9 + Math.random() * 0.2);
+        if (e.el && this.zone?.el === e.el) d *= 1.4;
+        if (e.el === 'earth' && t.traits?.has('fly') && !t.grounded) { this.pop(t, '無效', '#c8c8c8'); continue; }
+        this.damage(t, Math.round(d), { weak });
+        if (weak) { t.revealed.add(tag); this.remember(t); await this.breakHit(t, 1); }
+      }
     }
     await wait(400); this.checkDeaths(); u.spr.setFrame(BPOSE.idle); this.ui.refresh();
   }
@@ -671,16 +930,26 @@ export class Battle {
     const E = this.opts.troop.map(id => ENEMIES[id]);
     let exp = E.reduce((s, e) => s + e.exp, 0), gil = E.reduce((s, e) => s + e.gil, 0);
     const P = this.party.flatMap(u => u.on);
+    const best = (k) => Math.max(0, ...this.party.map(u => u.fx?.[k] || 0)) + (this.S.meal?.n > 0 ? this.S.meal.fx[k] || 0 : 0);
     if (P.includes('p_exp')) exp = Math.round(exp * 1.5);
     if (P.includes('p_gil')) gil = Math.round(gil * 1.5);
+    exp = Math.round(exp * (1 + best('exp'))); gil = Math.round(gil * (1 + best('gil')));
+    const dropMul = 1 + best('drop') + (this.dropBonus || 0);
     const drops = [];
-    for (const e of E) for (const [id, ch] of e.drops || []) if (Math.random() < ch) { drops.push(id); addItem(this.S, id, 1); }
+    for (const e of E) {
+      for (const [id, ch] of e.drops || []) if (Math.random() < Math.min(1, ch * dropMul)) { drops.push(id); addItem(this.S, id, 1); }
+      // equipment drops: bosses always leave a rare piece
+      if (e.boss || Math.random() < 0.07 * dropMul) { const g = randomGear(e.tier + (e.boss ? 1 : 0), true); if (g) { drops.push(g); addItem(this.S, g, 1); } }
+    }
     this.S.gil += gil;
     const { gainExp, gainBond } = await import('./party.js');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
+    const ap = E.reduce((s, e) => s + (e.ap || 1), 0);
+    const learned = gainAP(this.S, ap);
+    if (this.S.meal?.n > 0) { this.S.meal.n--; if (!this.S.meal.n) this.S.meal = null; }
     this.S.battles++;
-    await this.ui.results({ exp, gil, drops, ups, bond });
+    await this.ui.results({ exp, gil, drops, ups, bond, ap, learned });
   }
 }
 
@@ -711,7 +980,7 @@ class BattleUI {
     this.en.innerHTML = '';
     for (const u of b.units.filter(u => u.side === 'enemy')) {
       const d = document.createElement('div'); d.className = 'b-einfo' + (u.boss ? ' boss' : '');
-      d.innerHTML = `<div class="b-ename">${u.name}</div><div class="b-ebar"><i></i></div><div class="b-erow"><span class="b-shield"><b></b></span><span class="b-weak"></span></div>`;
+      d.innerHTML = `<div class="b-ename">${u.name}<span class="b-etr">${[...u.traits].map(t => `<i title="${TRAIT_N[t][1]}">${TRAIT_N[t][0]}</i>`).join('')}</span><span class="b-est"></span></div><div class="b-ebar"><i></i></div><div class="b-erow"><span class="b-shield"><b></b></span><span class="b-weak"></span></div>`;
       this.en.appendChild(d); u.info = d;
       d.onclick = () => this.pickHook && this.pickHook(u);
     }
@@ -736,7 +1005,7 @@ class BattleUI {
   refresh() {
     const b = this.b; if (!this.pt) return;
     this.pt.innerHTML = b.party.map(u => {
-      const st = Object.keys(u.status).map(k => ({ poison: '毒', sleep: '眠', silence: '默', blind: '盲', slow: '緩', regen: '再' })[k]).join('');
+      const st = Object.keys(u.status).map(k => STATUS_S[k] || '').join('') + Object.keys(u.barrier || {}).map(e => ICON[e]).join('') + (u.stance ? '構' : '') + (u.enchant ? ICON[u.enchant.el] : '');
       const bf = Object.entries(u.buffs).map(([k, v]) => `<i class="${v.v > 0 ? 'up' : 'dn'}">${({ atk: '攻', def: '防', mag: '魔', spr: '精', spd: '速' })[k]}</i>`).join('');
       return `<div class="b-pc ${u.alive ? '' : 'ko'} ${b.current === u ? 'cur' : ''}" data-id="${u.id}">
         <div class="b-pn"><b style="color:${u.color}">${u.name}</b><span class="b-st">${st}${bf}${u.taunt ? '<i class="up">挑</i>' : ''}${u.jumping ? '<i class="up">跳</i>' : ''}</span></div>
@@ -749,7 +1018,10 @@ class BattleUI {
       d.style.display = u.alive ? '' : 'none';
       d.querySelector('.b-ebar i').style.width = (u.hp / u.st.hp * 100) + '%';
       const sh = d.querySelector('.b-shield'); sh.classList.toggle('broken', u.broken); sh.querySelector('b').textContent = u.broken ? 'BREAK' : u.shield;
-      const tags = u.E.hideWeak ? u.weak.filter(w => u.revealed.has(w)).slice(0, 8) : u.weak;
+      d.querySelector('.b-est').textContent = Object.keys(u.status).map(k => STATUS_S[k] || '').join('') + (u.noArmor && u.traits.has('armor') ? '破' : '') + (u.grounded ? '墜' : '') + (u.mark ? '印' : '');
+      d.querySelector('.b-etr').style.opacity = (u.noArmor && u.traits.has('armor')) || (u.grounded && u.traits.has('fly')) ? 0.35 : 1;
+      const allWeak = [...u.weak, ...Object.keys(u.extraWeak || {}).filter(w => !u.weak.includes(w))];
+      const tags = u.E.hideWeak ? allWeak.filter(w => u.revealed.has(w)).slice(0, 10) : allWeak;
       d.querySelector('.b-weak').innerHTML = (u.E.hideWeak ? [...tags, '?'] : tags).map(w => w === '?' || !u.revealed.has(w) ? '<i class="unk">?</i>' : `<i title="${ELEM[w] || WPN[w]}">${ICON[w]}</i>`).join('');
     }
   }
@@ -801,11 +1073,13 @@ class BattleUI {
   // ---------------------------------------------------------------- commands
   async command(u, extra) {
     const b = this.b, S = b.S;
-    const sk = skillsOf(S, u.hero);
-    const items = Object.keys(S.items).filter(i => ITEMS[i] && ITEMS[i].tgt);
+    const sk = skillsOf(S, u.hero), arts = artsOf(S, u.hero), spells = spellsOf(S, u.hero);
+    const items = Object.keys(S.items).filter(i => ITEMS[i] && ITEMS[i].tgt && ITEMS[i].use && !ITEMS[i].use.grow);
     const opts = [
-      { k: 'attack', label: '攻擊', sub: ICON[u.wpn] },
+      { k: 'attack', label: '攻擊', sub: u.hands.map(h => ICON[h.type] || '👊').join('') },
       { k: 'skill', label: '技能', disabled: !sk.own.length },
+      { k: 'arts', label: '戰技', disabled: !arts.length, sub: arts.length ? arts.length + '' : '' },
+      { k: 'magic', label: '魔法', disabled: !spells.length, sub: spells.length ? spells.length + '' : '' },
       { k: 'echo', label: u.echo ? '迴響：' + ECHOES[u.echo].short : '迴響', disabled: !sk.echo.length },
       { k: 'item', label: '道具', disabled: !items.length },
       { k: 'defend', label: '防禦' },
@@ -813,28 +1087,50 @@ class BattleUI {
     if (u.limit >= 100) opts.splice(1, 0, { k: 'limit', label: '★ 極限技', cls: 'lim' });
     if (S.summons.length && !b.summonU && !extra) opts.push({ k: 'summon', label: '召喚' });
     if (!extra) opts.push({ k: 'flee', label: '逃跑', disabled: b.units.some(x => x.boss) || b.opts.noFlee });
-    for (;;) {
-      const i = await this.list(opts.map(o => ({ label: o.label, sub: o.sub, disabled: o.disabled, cls: o.cls })), { title: u.name + (extra ? '・追加' : ''), cancel: false, cmd: true });
-      if (i === 'auto') return { kind: 'auto' };
-      const o = opts[i];
-      if (o.k === 'attack') { const t = await this.pickTarget(u, SKILLS.attack); if (t) return { kind: 'skill', skill: 'attack', targets: t }; continue; }
-      if (o.k === 'skill' || o.k === 'echo') {
-        const list = o.k === 'skill' ? sk.own : sk.echo;
-        const j = await this.list(list.map(s => { const D = SKILLS[s]; const tags = [...(D.wpn ? [D.wpn] : []), ...(D.el ? [].concat(D.el) : [])]; return { label: D.name, sub: tags.map(t => ICON[t]).join('') + (D.mp ? ` <em>${D.mp}</em>` : ''), disabled: (D.mp || 0) > u.mp || (u.status.silence && ['mag', 'heal', 'debuff'].includes(D.type)), desc: D.desc }; }), { title: o.label, cancel: true });
-        if (j < 0) continue;
+    const row = (s) => { const D = SKILLS[s]; const tags = b.tagsOf(u, D); const cost = b.mpCost(u, D); return { label: D.name, sub: tags.map(t => ICON[t] || '').join('') + (cost ? ` <em>${cost}</em>` : ''), disabled: cost > u.mp || (u.status.silence && !D.art && (D.spell || ['mag', 'heal', 'debuff'].includes(D.type))), desc: D.desc + (D.art ? `　（${WPN[D.art]}戰技）` : '') }; };
+    const pickSkill = async (list, title) => {
+      for (;;) {
+        const j = await this.list(list.map(row), { title, cancel: true });
+        if (j < 0) return null;
         const sid = list[j], D = SKILLS[sid];
         const t = await this.pickTarget(u, D); if (!t) continue;
         if (D.relay) return { kind: 'relay', targets: t };
         return { kind: 'skill', skill: sid, targets: t };
       }
+    };
+    for (;;) {
+      const i = await this.list(opts.map(o => ({ label: o.label, sub: o.sub, disabled: o.disabled, cls: o.cls })), { title: u.name + (extra ? '・追加' : ''), cancel: false, cmd: true });
+      if (i === 'auto') return { kind: 'auto' };
+      const o = opts[i];
+      if (o.k === 'attack') { const t = await this.pickTarget(u, ['whip', 'boomerang'].includes(u.wpn) ? { tgt: 'enemies' } : SKILLS.attack); if (t) return { kind: 'skill', skill: 'attack', targets: t }; continue; }
+      if (o.k === 'skill' || o.k === 'echo' || o.k === 'arts') { const a = await pickSkill(o.k === 'skill' ? sk.own : o.k === 'echo' ? sk.echo : arts, o.label); if (a) return a; continue; }
+      if (o.k === 'magic') {
+        const schools = Object.keys(SCHOOL_N).filter(sc => spells.some(s => SKILLS[s].school === sc));
+        for (;;) {
+          const j = schools.length === 1 ? 0 : await this.list(schools.map(sc => ({ label: SCHOOL_N[sc], sub: spells.filter(s => SKILLS[s].school === sc).length + '' })), { title: '魔法', cancel: true });
+          if (j < 0) break;
+          const list = spells.filter(s => SKILLS[s].school === schools[j]).sort((a, b2) => SKILLS[a].tier - SKILLS[b2].tier || SKILLS[a].mp - SKILLS[b2].mp);
+          const a = await pickSkill(list, SCHOOL_N[schools[j]]); if (a) return a;
+          if (schools.length === 1) break;
+        }
+        continue;
+      }
       if (o.k === 'limit') return { kind: 'limit' };
       if (o.k === 'item') {
-        const j = await this.list(items.map(i => ({ label: ITEMS[i].name, sub: '×' + S.items[i], desc: ITEMS[i].desc })), { title: '道具', cancel: true });
-        if (j < 0) continue;
-        const id = items[j], I = ITEMS[id];
-        if (I.tgt === 'none') return { kind: 'item', item: id, targets: [] };
-        const t = await this.pickTarget(u, { tgt: I.tgt === 'enemies' ? 'enemies' : I.tgt === 'allies' ? 'allies' : I.tgt === 'dead' ? 'dead' : 'ally' }); if (!t) continue;
-        return { kind: 'item', item: id, targets: t };
+        const cats = Object.keys(ITEM_CATS).filter(c => items.some(i => ITEMS[i].cat === c));
+        let got = null;
+        for (;;) {
+          const c = cats.length === 1 ? 0 : await this.list(cats.map(c => ({ label: ITEM_CATS[c], sub: items.filter(i => ITEMS[i].cat === c).length + '' })), { title: '道具', cancel: true });
+          if (c < 0) break;
+          const list = items.filter(i => ITEMS[i].cat === cats[c]);
+          const j = await this.list(list.map(i => ({ label: ITEMS[i].name, sub: '×' + S.items[i], desc: ITEMS[i].desc })), { title: ITEM_CATS[cats[c]], cancel: true });
+          if (j < 0) { if (cats.length === 1) break; continue; }
+          const id = list[j], I = ITEMS[id];
+          if (I.tgt === 'none') { got = { kind: 'item', item: id, targets: [] }; break; }
+          const t = await this.pickTarget(u, { tgt: I.tgt === 'enemies' || I.tgt === 'random' ? 'enemies' : I.tgt === 'enemy' ? 'enemy' : I.tgt === 'allies' ? 'allies' : I.tgt === 'dead' ? 'dead' : I.tgt === 'self' ? 'self' : I.tgt === 'allyOther' ? 'allyOther' : 'ally' }); if (!t) continue;
+          got = { kind: 'item', item: id, targets: t }; break;
+        }
+        if (got) return got; continue;
       }
       if (o.k === 'defend') return { kind: 'defend' };
       if (o.k === 'flee') return { kind: 'flee' };
@@ -908,7 +1204,9 @@ class BattleUI {
     const G = this.b.G;
     return new Promise((res) => {
       const lines = [`<div class="r-row"><span>經驗值</span><b>${r.exp}</b></div>`, `<div class="r-row"><span>金幣</span><b>${r.gil} G</b></div>`];
+      if (r.ap) lines.push(`<div class="r-row"><span>AP</span><b>${r.ap}</b></div>`);
       if (r.drops.length) lines.push(`<div class="r-row"><span>獲得</span><b>${r.drops.map(itemName).join('、')}</b></div>`);
+      for (const [id, sp] of r.learned || []) lines.push(`<div class="r-bond">${HEROES[id].name} 學會了「${SKILLS[sp].name}」！</div>`);
       for (const [id, lv, sk] of r.ups) lines.push(`<div class="r-up">${HEROES[id].name} 升到了 Lv ${lv}！${sk.length ? '　學會了 ' + sk.join('、') : ''}</div>`);
       for (const [e, lv, got] of r.bond) lines.push(`<div class="r-bond">迴響「${ECHOES[e].short}」羈絆提升到 ${lv}！${got.length ? '　習得：' + got.join('、') : ''}</div>`);
       this.cmd.classList.remove('on');

@@ -538,6 +538,7 @@ MON.mech = (c) => {
   return p.outline();
 };
 function scaleUp(p, k) { if (k === 1) return p; const o = new Px(p.w * k, p.h * k); for (let y = 0; y < o.h; y++) for (let x = 0; x < o.w; x++) o.d[y * o.w + x] = p.get(x / k | 0, y / k | 0); return o; }
+export function registerMonster(kind, f) { MON[kind] = f; }
 export function monsterPx(kind, colors) { reseed(kind.length * 977 + (colors.body || '').length * 31 + 7); return MON[kind](colors); }
 
 // ======================================================================

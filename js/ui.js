@@ -1,7 +1,9 @@
 // Menus and windows: dialogue, choices, the main menu, shops, inns, notices and little overlays.
 import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js';
 import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands } from './party.js';
-import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N } from './content.js';
+import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js';
+import { ENEMIES } from './data.js';
+import { monsterPx } from './pixel.js';
 import { personSheet, battleSheet } from './pixel.js';
 import { lookOf } from './field.js';
 
@@ -99,21 +101,22 @@ export class UI {
     let start = 0;
     for (;;) {
       this.hud();
-      const opts = ['隊伍狀態', '迴響水晶', '能力配置', '裝備', '魔法・戰技', '道具', '委託任務', '召喚獸', '隊伍編成', '存檔', '設定', '關閉選單'];
+      const opts = ['隊伍狀態', '迴響水晶', '能力配置', '裝備', '魔法・戰技', '道具', '怪物圖鑑', '委託任務', '召喚獸', '隊伍編成', '存檔', '設定', '關閉選單'];
       const i = await this.choose(opts.map(l => ({ label: l })), { title: `${G.mapName()}　<span class="gil">${S.gil} G</span>　<span class="tm">${fmtTime(S.time)}</span>`, info: this.partySummary(), start, cls: 'mainmenu' });
       start = Math.max(0, i);
-      if (i < 0 || i === 11) break;
+      if (i < 0 || i === 12) break;
       if (i === 0) await this.statusMenu();
       if (i === 1) await this.echoMenu();
       if (i === 2) await this.passiveMenu();
       if (i === 3) await this.equipMenu();
       if (i === 4) await this.magicMenu();
       if (i === 5) await this.itemMenu();
-      if (i === 6) await this.questMenu();
-      if (i === 7) await this.summonMenu();
-      if (i === 8) await this.formationMenu();
-      if (i === 9) { if (G.canSave()) { G.save(); this.toast('已存檔'); G.audio.sfx('save'); } else this.toast('這裡無法存檔（請到存檔水晶旁）'); }
-      if (i === 10) await this.settingsMenu();
+      if (i === 6) await this.bestiaryMenu();
+      if (i === 7) await this.questMenu();
+      if (i === 8) await this.summonMenu();
+      if (i === 9) await this.formationMenu();
+      if (i === 10) { if (G.canSave()) { G.save(); this.toast('已存檔'); G.audio.sfx('save'); } else this.toast('這裡無法存檔（請到存檔水晶旁）'); }
+      if (i === 11) await this.settingsMenu();
     }
     this.hud();
   }
@@ -305,6 +308,24 @@ export class UI {
       if (I.use.cure || I.use.cureOnly) used = true;
     }
     if (used) { spend(); this.G.audio.sfx('heal'); } else this.G.audio.sfx('error');
+  }
+  async bestiaryMenu() {
+    const S = this.S, kills = S.kills || {}, seen = S.dropSeen || {};
+    const list = Object.keys(ENEMIES).filter(id => !id.endsWith('_trial')).sort((a, b) => ENEMIES[a].lv - ENEMIES[b].lv);
+    const met = list.filter(id => kills[id] || S.flags['seen_' + id]).length;
+    const pic = (id) => { try { const E = ENEMIES[id]; return monsterPx(E.kind, E.colors).canvas(3).toDataURL(); } catch (e) { return ''; } };
+    await this.choose(list.map((id, n) => { const k = kills[id] || 0, E = ENEMIES[id]; return { label: k || S.flags['seen_' + id] ? E.name : '？？？', sub: `Lv ${E.lv}${k ? '　' + k : ''}` }; }), {
+      title: `怪物圖鑑　${met}/${list.length}`, cls: 'items', info: (n) => {
+        const id = list[n], E = ENEMIES[id], k = kills[id] || 0;
+        if (!k && !S.flags['seen_' + id]) return '<div class="gi"><h4>？？？</h4><p>還沒有遇過。</p></div>';
+        const rev = new Set(S.flags['seen_' + id] || []); const weak = k >= 3 ? E.weak : E.weak.filter(w => rev.has(w));
+        return `<div class="gi bst"><img src="${pic(id)}"><h4>${E.name}${E.boss ? '　〔頭目〕' : ''}</h4><div class="gi-kind">Lv ${E.lv}　${FAM_N[E.fam] || ''}系　HP ${E.hp}　打倒 ${k} 隻</div>
+          <div>${E.traits.map(t => TRAIT_N[t] ? `${TRAIT_N[t][0]} ${TRAIT_N[t][1]}` : '').join('　')}</div>
+          <div>弱點：${weak.map(w => ICON[w] || w).join(' ') || '？'}${E.weak.length > weak.length ? ' ？' : ''}　${E.resist?.length ? '抗性：' + E.resist.map(w => ICON[w] || w).join(' ') : ''}</div>
+          <div class="bst-drops">${(E.drops || []).map(([d, ch], s) => `<div><small>${DROP_N[s]}</small>${k ? (seen[id + ':' + s] ? '✓ ' : '') + itemName(d) : '？？？'}${k ? `<em>${ch >= 1 ? '必定' : Math.round(ch * 1000) / 10 + '%'}</em>` : ''}</div>`).join('')}</div>
+          ${E.hab ? `<div class="gi-kind">出沒：${E.hab.map(h => ({ field: '草原', forest: '森林', mountain: '山地', cave: '洞窟', coast: '海邊', temple: '神殿', sky: '天空', void: '虛空', snow: '雪原' })[h]).join('、')}</div>` : ''}
+          ${k < 3 && E.weak.length > weak.length ? '<div class="gi-kind">打倒3隻就會記住全部弱點</div>' : ''}</div>`;
+      } });
   }
   async questMenu() {
     const Q = this.G.quests(); const S = this.S;

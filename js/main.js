@@ -8,8 +8,8 @@ import { Audio } from './audio.js';
 import { Input } from './input.js';
 import { makeStory } from './story.js';
 import { MAPS } from './maps.js';
-import { HEROES, ITEMS } from './data.js';
-import './content.js';
+import { HEROES, ITEMS, ENEMIES } from './data.js';
+import { BESTIARY_NEW } from './content.js';
 import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx } from './party.js';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
@@ -229,9 +229,27 @@ class Game {
   }
   async randomBattle(enc) {
     if (this.busy || this.mode !== 'field') return;
-    const troop = enc.troops[Math.random() * enc.troops.length | 0];
+    let troop = enc.troops[Math.random() * enc.troops.length | 0];
+    const wild = this.wildTroop(enc);
+    if (wild) troop = wild;
     const res = await this.fight({ troop, bg: this.bgFor(), preemptive: Math.random() < 0.1, random: true });
     return res;
+  }
+  // pick monsters from the big bestiary that live on this kind of ground and fit the area's level
+  wildTroop(enc) {
+    const bg = this.bgFor(), post = this.S.flags.cleared;
+    const lv = post ? Math.max(enc.lv, 28 + Math.floor(Math.random() * 24)) : enc.lv;
+    const near = (E, span) => Math.abs(E.lv - lv) <= span;
+    const metal = BESTIARY_NEW.filter(id => ENEMIES[id].metal && ENEMIES[id].lv <= lv + 12 && ENEMIES[id].hab.includes(bg));
+    if (metal.length && Math.random() < 0.035) { const m = metal[Math.random() * metal.length | 0]; return Math.random() < 0.3 ? [m, m] : [m]; }
+    if (Math.random() > (post ? 0.85 : 0.55)) return null;
+    let pool = BESTIARY_NEW.filter(id => { const E = ENEMIES[id]; return !E.metal && E.hab.includes(bg) && near(E, Math.max(3, lv * 0.22)); });
+    if (pool.length < 2) pool = BESTIARY_NEW.filter(id => !ENEMIES[id].metal && near(ENEMIES[id], Math.max(4, lv * 0.3)) && ENEMIES[id].hab.includes(bg));
+    if (!pool.length) return null;
+    const out = []; let room = 4;
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) { const id = pool[Math.random() * pool.length | 0], size = ENEMIES[id].scale >= 1.3 || ENEMIES[id].kind === 'dragon' ? 3 : ['beast', 'ogre', 'hydra', 'octopus', 'golem', 'worm', 'mech'].includes(ENEMIES[id].kind) ? 2 : 1; if (size > room) break; out.push(id); room -= size; }
+    return out.length ? out : null;
   }
   async fight(opts) {
     const wasBusy = this.busy; this.busy = true;

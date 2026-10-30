@@ -7,6 +7,7 @@
 // Dev tool: shows every generated sprite so the pixel art can be checked at a glance.
 import { personSheet, battleSheet, monsterPx, propPx } from '../js/pixel.js';
 import { HEROES, ECHOES, ENEMIES } from '../js/data.js';
+import '../js/content.js';
 import { LOOKS } from '../js/maps.js';
 const out = document.getElementById('out');
 const add = (title, canvas, scale = 3) => { const f = document.createElement('figure'); canvas.style.width = canvas.width * scale + 'px'; f.appendChild(canvas); f.appendChild(document.createElement('br')); f.append(title); return f; };

@@ -1,6 +1,8 @@
 // Generated content: weapon types with their own battle rules, 1000+ pieces of equipment with effects,
 // 400 spells, 500 items and the weapon arts. Everything is built from tables so it stays consistent.
 import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js';
+import { BESTIARY_NEW } from './monsters.js';
+export { BESTIARY_NEW };
 
 export const ELS = ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'];
 const EANIM = { fire: 'fire', ice: 'ice', thunder: 'thunder', water: 'water', wind: 'wind', earth: 'quake', light: 'holy', dark: 'dark' };
@@ -436,7 +438,7 @@ const FOODS = [['烤魚', { start: { atk: 1 } }], ['海鮮湯', { start: { spr: 
   ['辣味炒麵', { crit: 0.1 }], ['甜甜圈', { limit: 50 }], ['藥膳雞湯', { auto: ['regen'], start: { spr: 1 } }], ['皇家套餐', { start: { atk: 2, def: 2, mag: 2, spr: 2 } }], ['冒險者三明治', { exp: 0.1, gil: 0.1 }], ['月光酒', { start: { mag: 1 }, mpregen: 0.03 }], ['勇者拉麵', { start: { atk: 3 } }], ['賢者茶點', { start: { mag: 3 } }], ['守衛乾糧', { start: { def: 3 } }], ['疾風烤串', { start: { spd: 3 } }]];
 FOODS.forEach(([n, fx], i) => addI(`i_food${i + 1}`, { name: n, price: 80 + (i % 10) * 40 + Math.floor(i / 10) * 200, use: { meal: fx }, field: true, desc: '料理：之後5場戰鬥都有效果　' + mealDesc(fx), cat: 'food' }));
 function mealDesc(fx) { const o = []; if (fx.start) o.push(Object.entries(fx.start).map(([k, v]) => STAT_N[k] + '+' + v).join('、') + '（戰鬥開始時）'); if (fx.auto) o.push('自動再生'); if (fx.exp) o.push(`經驗+${fx.exp * 100}%`); if (fx.gil) o.push(`金幣+${fx.gil * 100}%`); if (fx.drop) o.push(`掉寶+${fx.drop * 100}%`); if (fx.limit) o.push(`極限值初始+${fx.limit}`); if (fx.resist) o.push(Object.keys(fx.resist).map(e => ELEM[e]).join('') + '屬性傷害減半'); if (fx.mpregen) o.push('每回合回復MP'); if (fx.first) o.push('先制'); if (fx.crit) o.push('會心+10%'); return o.join('、'); }
-const FAM_MAT = { beast: '獸牙', flying: '羽毛', plant: '花蜜', amorph: '凝膠', undead: '骨片', machine: '齒輪', aquatic: '鱗片', spirit: '靈晶', dragon: '龍鱗', humanoid: '布料' };
+const FAM_MAT = { beast: '獸牙', flying: '羽毛', plant: '花蜜', amorph: '凝膠', undead: '骨片', machine: '齒輪', aquatic: '鱗片', spirit: '靈晶', dragon: '龍鱗', humanoid: '布料', demon: '魔角' };
 const MAT_T = ['小', '普通的', '堅硬的', '上等的', '稀有的', '精良的', '傳說的', '神話的'];
 for (const [f, n] of Object.entries(FAM_MAT)) for (let t = 0; t < 8; t++) addI(`i_m_${f}${t + 1}`, { name: MAT_T[t] + n, price: 0, sell: [10, 25, 60, 120, 240, 420, 700, 1100][t], mat: true, desc: `${FAM_N[f]}系怪物的素材。可以拿去鍛造強化或賣錢`, cat: 'mat', fam: f, tier: t });
 const GEM_T = ['碎晶', '晶石', '寶珠', '神珠'];
@@ -463,19 +465,12 @@ const KIND = {
   fish: ['aquatic', ['evade'], ['whip']], mage: ['humanoid', [], ['gun', 'katana']], crab: ['aquatic', ['armor'], ['hammer']], wisp: ['spirit', ['fly'], ['tome']],
   knight: ['undead', ['armor'], ['hammer', 'katana']], dragon: ['dragon', ['fly'], ['spear', 'greatsword']], tree: ['plant', [], ['greatsword']], serpent: ['dragon', [], ['katana']],
   lord: ['demon', [], ['tome']], mech: ['machine', ['armor'], ['gun', 'knuckle']],
+  beast: ['beast', [], ['spear', 'greatsword']], ogre: ['humanoid', [], ['katana', 'spear']], imp: ['demon', ['fly'], ['bow', 'tome']], mimic: ['machine', ['armor'], ['hammer']],
+  cactus: ['plant', ['evade'], ['katana', 'boomerang']], bomb: ['spirit', ['fly'], ['whip']], eye: ['demon', ['fly'], ['bow', 'gun']], mushroom: ['plant', [], ['axe']],
+  insect: ['beast', ['armor'], ['hammer']], spider: ['beast', [], ['axe']], ghost: ['undead', ['fly', 'evade'], ['tome', 'staff']], hydra: ['dragon', [], ['katana']],
+  octopus: ['aquatic', [], ['knuckle', 'katana']], turtle: ['aquatic', ['armor'], ['hammer']], frog: ['aquatic', ['evade'], ['whip']], rabbit: ['beast', ['evade'], ['boomerang']],
+  gargoyle: ['demon', ['fly', 'armor'], ['hammer']], mummy: ['undead', [], ['tome']], elemental: ['spirit', [], ['tome']], worm: ['beast', [], ['spear']], pudding: ['amorph', [], ['tome', 'knuckle']],
 };
-for (const [id, E] of Object.entries(ENEMIES)) {
-  const k = KIND[E.kind] || ['beast', [], []];
-  E.fam = E.fam || k[0]; E.traits = E.traits || [...k[1]];
-  if (!E.boss) E.weak = [...new Set([...E.weak, ...k[2].slice(0, 1)])];
-  else E.weak = [...new Set([...E.weak, ...k[2]])];
-  // drop the family material of the enemy's tier, sometimes a gem
-  const t = Math.max(0, Math.min(7, Math.floor(E.lv / 6)));
-  E.drops = [...(E.drops || []), [`i_m_${E.fam}${t + 1}`, E.boss ? 1 : 0.35]];
-  if (!E.boss && E.lv >= 4) E.drops.push([`i_gem_${(E.weak.find(w => ELS.includes(w)) ? ELS[(ELS.indexOf(E.weak.find(w => ELS.includes(w))) + 4) % 8] : 'earth')}${Math.min(4, 1 + Math.floor(t / 2))}`, 0.06]);
-  E.tier = t;
-  E.ap = E.boss ? 12 + t * 4 : 1 + Math.floor(t / 2);
-}
 
 // ================================================================ loot tables by tier (shops, chests, drops)
 export const GEAR_BY_TIER = Array.from({ length: 8 }, () => ({ base: [], rare: [], acc: [] }));
@@ -485,6 +480,46 @@ export function randomGear(tier, rare = true, rnd = Math.random) {
   const pool = rare ? (rnd() < 0.2 && B.acc.length ? B.acc : B.rare) : B.base;
   return pool[Math.floor(rnd() * pool.length)];
 }
+// ================================================================ enemies: family, traits, and four drops each
+// slots: common (material), uncommon (consumable), rare (gem / seed / treasure), very rare (equipment)
+const CONS = [['potion', 'antidote', 'i_c_poison', 'ether', 'i_tw_dagger1'], ['potion', 'ether', 'i_c_sleep', 'bombfrag', 'i_b_atk1'], ['hipotion', 'ether', 'i_c_silence', 'frostfrag', 'i_b_def1', 'i_tw_axe1'],
+  ['hipotion', 'hiether', 'i_hp3', 'i_t_wind1', 'i_b_mag1', 'i_s_sleep1'], ['i_hp3', 'hiether', 'i_el1', 'i_t_fire2', 'i_ga2', 'i_haste'], ['i_hp4', 'i_mp3', 'i_el1', 'i_rv2', 'i_t_ice2', 'i_regen'],
+  ['i_hp5', 'i_mp4', 'i_el2', 'i_rv3', 'i_t_thunder3', 'i_reflect'], ['i_hp6', 'i_mp5', 'i_el2', 'i_rv3', 'i_reraise', 'i_t_light4']];
+const SEEDS = ['hp', 'mp', 'atk', 'def', 'mag', 'spr', 'spd'];
+export const DROP_N = ['常見', '普通', '稀有', '極稀有'];
+const hashStr = (str) => { let h = 2166136261; for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
+function buildDrops(id, E) {
+  const t = E.tier, h = hashStr(id), B = GEAR_BY_TIER[Math.min(7, t + (E.boss ? 1 : 0))];
+  const el = E.el || ELS.find(e => E.weak.includes(e)) && ELS[(ELS.indexOf(ELS.find(e => E.weak.includes(e))) + 4) % 8] || ELS[h % 8];
+  const gemT = Math.min(4, 1 + Math.floor(t / 2));
+  const rareSlot = h % 5 === 0 ? `i_seed_${SEEDS[h % 7]}` : h % 3 === 0 ? `i_tr${1 + h % 20}_${Math.min(3, Math.floor(t / 2))}` : `i_gem_${el}${gemT}`;
+  const gearPool = (h % 4 === 0 && B.acc.length) ? B.acc : B.rare;
+  const veryRare = t >= 4 && h % 6 === 0 ? `i_fruit_${SEEDS[(h >>> 3) % 7]}` : gearPool[(h >>> 5) % gearPool.length];
+  let slots = E.metal
+    ? [[`i_tr${1 + h % 20}_${Math.min(3, 1 + Math.floor(t / 3))}`, 0.5], [`i_refine${Math.min(5, 1 + Math.floor(t / 2))}`, 0.3], [`i_fruit_${SEEDS[h % 7]}`, 0.15], [GEAR_BY_TIER[Math.min(7, t + 2)].rare[h % GEAR_BY_TIER[Math.min(7, t + 2)].rare.length], 0.1]]
+    : [[`i_m_${E.fam}${t + 1}`, E.boss ? 1 : 0.5], [CONS[t][h % CONS[t].length], E.boss ? 1 : 0.25], [rareSlot, E.boss ? 0.5 : 0.08], [veryRare, E.boss ? 1 : 0.025]];
+  // story drops (quest items, shards, fixed rewards) take over slots, keeping their own odds
+  const generic = new Set(['potion', 'antidote', 'ether', 'hipotion', 'hiether', 'xpotion', 'bombfrag']);
+  const special = (E.drops || []).filter(d => !generic.has(d[0]) && !String(d[0]).startsWith('i_'));
+  const gen = (E.drops || []).filter(d => generic.has(d[0]));
+  if (gen[0]) slots[1] = gen[0];
+  special.forEach((d, i) => { const at = [1, 2, 0, 3][i] ?? 3; slots[at] = d; });
+  return slots;
+}
+function processEnemies() {
+  for (const [id, E] of Object.entries(ENEMIES)) {
+    const k = KIND[E.kind] || ['beast', [], []];
+    E.fam = E.fam || k[0]; E.traits = E.traits || [...k[1]];
+    if (!E.wild) { if (!E.boss) E.weak = [...new Set([...E.weak, ...k[2].slice(0, 1)])]; else E.weak = [...new Set([...E.weak, ...k[2]])]; }
+    else E.weak = [...new Set([...E.weak, k[2][E.lv % k[2].length]].filter(Boolean))];
+    E.tier = Math.max(0, Math.min(7, Math.floor(E.lv / 7)));
+    E.ap = E.boss ? 12 + E.tier * 4 : E.metal ? 10 + E.tier * 4 : 1 + Math.floor(E.tier / 2);
+    E.drops = buildDrops(id, E);
+  }
+}
+processEnemies();
+export const ENEMY_COUNT = Object.keys(ENEMIES).length;
+
 // describe an equipment piece's effects in plain words
 export function fxText(fx) {
   if (!fx) return [];

@@ -425,6 +425,9 @@ export class Battle {
         if (S.weakEl) el = [this.elOf(tgt)];
         if (S.randEl) el = [ELS[Math.random() * 8 | 0]];
         const tags = [...this.tagsOf(u, { ...S, el: undefined }), ...el];
+        if (S.selfDestruct) { this.effect('explode', tgt, 'fire', u); this.camShake = 0.5; await wait(200); const d = Math.max(1, u.hp); u.hp = 0; this.damage(tgt, d, {}); total += d; this.pop(u, '自爆！', '#ff8a3a', true); return; }
+        if (S.fixedLv) { this.effect(S.anim, tgt, 'earth', u); await wait(180); const d = S.fixedLv * (u.lv || 10); this.damage(tgt, d, {}); total += d; return; }
+        if (S.gravity && tgt.E?.metal) { this.pop(tgt, '無效', '#c8c8c8'); return; }
         if (S.gravity) { this.effect('dark', tgt, 'dark', u); await wait(180); const d = Math.max(1, Math.round(tgt.hp * S.gravity * (tgt.boss ? 0.3 : 1))); this.damage(tgt, d, {}); total += d; return; }
         if (S.osmose) { this.effect('dark', tgt, 'dark', u); await wait(150); const r = this.calc(u, tgt, S, tags, {}); const m = Math.min(tgt.mp ?? 0, Math.max(5, Math.round(r.dmg * 0.25))); if (tgt.side === 'enemy') { u.mp = Math.min(u.st.mp, u.mp + m); this.number(u, m, '#8ac8ff', {}); } else { tgt.mp = Math.max(0, tgt.mp - m); } return; }
         if (S.delay) { (this.delayed = this.delayed || []).push({ u, t: tgt, sid }); this.effect('scan', tgt, el[0], u); this.pop(tgt, '設下時限', '#ffb04a'); return; }
@@ -478,6 +481,7 @@ export class Battle {
         this.effect(S.anim || 'dark', tgt, [].concat(S.el || 'dark')[0], u); await wait(150);
         if (S.pow) { const r = this.calc(u, tgt, { ...S, type: 'mag' }, S.el ? [].concat(S.el) : [], o); if (!r.miss && !r.block) { this.damage(tgt, r.dmg, { weak: r.weak }); if (r.weak && tgt.side === 'enemy') await this.breakHit(tgt, 1); } }
         if (S.status && tgt.alive) this.inflict(tgt, S.status, S.chance || 0.5);
+        if (S.multiStatus && tgt.alive) for (const st of S.multiStatus) this.inflict(tgt, st, S.chance || 0.3, true);
         if (S.debuff && tgt.alive) this.buff(tgt, Object.fromEntries(Object.entries(S.debuff).map(([k, v]) => [k, -v])));
         if (S.dispel) this.dispel(tgt);
         if (S.delayT) this.delayTurn(tgt);
@@ -490,6 +494,7 @@ export class Battle {
         if (S.stealGil) { const g = Math.min(this.S.gil, 20 + Math.floor(Math.random() * 40)); this.S.gil -= g; this.pop(tgt, `被偷了 ${g}G`, '#ffe04a'); }
         if (S.flee) { this.pop(u, '逃走了', '#fff'); u.alive = false; u.fled = true; this.fadeOut(u); }
         if (S.chip && tgt.side === 'enemy') { this.effect('laser', tgt, 'light', u); await this.breakHit(tgt, S.chip); }
+        if (S.mpSuck) { const m = Math.round((tgt.mp || 0) * S.mpSuck); tgt.mp = Math.max(0, (tgt.mp || 0) - m); this.pop(tgt, `MP -${m}`, '#8ac8ff'); }
         if (S.quick) { this.pop(tgt, '迅捷！', '#ffe04a'); this.queue.unshift(tgt); }
         if (S.gilToss) { const cost = Math.min(this.S.gil, (u.lv || 10) * 50); this.S.gil -= cost; this.effect('light', tgt, 'light', u); this.damage(tgt, Math.round(cost * 0.8 / Math.max(1, targets.length)) + 1, {}); }
         await wait(300);
@@ -592,6 +597,7 @@ export class Battle {
     else A = phys ? (o.atk ?? u.st.atk) * this.bmul(u, 'atk') : u.st.mag * this.bmul(u, 'mag');
     const flying = t.traits?.has('fly') && !t.grounded;
     if (flying && tags.includes('earth') && !phys) return { miss: true, immune: true };
+    if (t.E?.metal && !phys) return { miss: true, immune: true };
     if (phys) {
       if (u.status.blind && Math.random() < 0.5) return { miss: true };
       const sure = ['bow', 'gun'].includes(wt) || S.ranged;
@@ -645,6 +651,8 @@ export class Battle {
     if (S.iai && this.firstInRound === u) critC = 1;
     const crit = Math.random() < critC; if (crit) dmg *= wt === 'katana' ? 2 : 1.5;
     dmg *= 0.92 + Math.random() * 0.16;
+    // metal monsters shrug off everything but a critical hit
+    if (t.E?.metal) return { dmg: crit ? t.hp : 1, weak: false, crit, resist: false };
     return { dmg: Math.max(1, Math.min(99999, Math.round(dmg))), weak, crit, resist, markHit };
   }
   remember(t) { if (t.side === 'enemy') this.S.flags['seen_' + t.id] = [...t.revealed]; }
@@ -659,7 +667,7 @@ export class Battle {
   }
   inflict(t, st, chance, quiet) {
     if (!t.alive) return;
-    if (t.immune || t.immuneSet?.has(st)) { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; }
+    if (t.immune || t.immuneSet?.has(st) || t.E?.metal) { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; }
     if (t.boss) { if (st === 'doom') { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; } if (['sleep', 'stop', 'confuse', 'stun'].includes(st)) chance *= 0.25; }
     if (Math.random() > chance) return;
     t.status[st] = { stop: 2, stun: 1, doom: 3, confuse: 2 }[st] || 3;
@@ -669,9 +677,14 @@ export class Battle {
   apply(t, st) { t.status[st] = st === 'reraise' ? 99 : st === 'haste' ? 4 : 3; this.pop(t, STATUS_N[st], '#8affb0'); }
   steal(u, t) {
     if (t.stolen) { this.pop(t, '已經沒東西了', '#c8c8c8'); return; }
-    const d = t.E.drops?.find(d => !['shard', 'stariron'].includes(d[0]) && !d[0].startsWith('x_') && !d[0].startsWith('w_')) || ['potion'];
-    if (Math.random() < 0.65) { t.stolen = true; addItem(this.S, d[0], 1); this.pop(t, `偷到了 ${itemName(d[0])}！`, '#ffe04a'); this.G.audio.sfx('item'); }
-    else this.pop(t, '偷竊失敗', '#c8c8c8');
+    const d = t.E.drops || [], bonus = u.fx?.steal || 0;
+    if (!d.length || Math.random() > 0.6 + bonus * 0.5) { this.pop(t, '偷竊失敗', '#c8c8c8'); return; }
+    // the rarer slots are harder to lift
+    const r = Math.random(), slot = r < 0.5 - bonus * 0.2 ? 0 : r < 0.8 - bonus * 0.2 ? 1 : r < 0.96 - bonus * 0.1 ? 2 : 3;
+    const id = (d[slot] || d[0])[0];
+    if (!id || String(id).startsWith('k_')) { this.pop(t, '偷竊失敗', '#c8c8c8'); return; }
+    t.stolen = true; addItem(this.S, id, 1); this.pop(t, `偷到了 ${itemName(id)}！`, '#ffe04a'); this.G.audio.sfx('item');
+    (this.S.dropSeen = this.S.dropSeen || {})[t.id + ':' + slot] = 1;
   }
   async breakHit(t, n) {
     if (t.broken) return;
@@ -804,6 +817,7 @@ export class Battle {
       if (e.regen) t.status.regen = e.regen;
       if (e.evadeT) { t.evadeT = e.evadeT; this.pop(t, '幻影', '#8affb0'); }
       if (e.analyze) { for (const w of t.weak || []) t.revealed.add(w); this.remember(t); this.pop(t, '弱點看穿！', '#ffe04a'); this.G.audio.sfx('scan'); }
+      if (e.dmg && t.E?.metal) { this.damage(t, 1, {}); continue; }
       if (e.dmg) {
         const tag = e.el || e.wpn; this.effect(e.el === 'fire' ? 'explode' : e.el ? ({ earth: 'quake', light: 'holy' }[e.el] || e.el) : 'slash', t, tag, u);
         const weak = t.weak?.includes(tag) || !!t.extraWeak?.[tag];
@@ -927,7 +941,7 @@ export class Battle {
   async victory() {
     this.G.audio.music('victory');
     for (const u of this.allies) u.spr.setFrame(BPOSE.win);
-    const E = this.opts.troop.map(id => ENEMIES[id]);
+    const E = this.units.filter(u => u.side === 'enemy' && !u.fled).map(u => u.E);
     let exp = E.reduce((s, e) => s + e.exp, 0), gil = E.reduce((s, e) => s + e.gil, 0);
     const P = this.party.flatMap(u => u.on);
     const best = (k) => Math.max(0, ...this.party.map(u => u.fx?.[k] || 0)) + (this.S.meal?.n > 0 ? this.S.meal.fx[k] || 0 : 0);
@@ -936,10 +950,10 @@ export class Battle {
     exp = Math.round(exp * (1 + best('exp'))); gil = Math.round(gil * (1 + best('gil')));
     const dropMul = 1 + best('drop') + (this.dropBonus || 0);
     const drops = [];
-    for (const e of E) {
-      for (const [id, ch] of e.drops || []) if (Math.random() < Math.min(1, ch * dropMul)) { drops.push(id); addItem(this.S, id, 1); }
-      // equipment drops: bosses always leave a rare piece
-      if (e.boss || Math.random() < 0.07 * dropMul) { const g = randomGear(e.tier + (e.boss ? 1 : 0), true); if (g) { drops.push(g); addItem(this.S, g, 1); } }
+    this.S.kills = this.S.kills || {}; this.S.dropSeen = this.S.dropSeen || {};
+    for (const u of this.units.filter(u => u.side === 'enemy' && !u.fled)) {
+      const e = u.E; this.S.kills[u.id] = (this.S.kills[u.id] || 0) + 1;
+      (e.drops || []).forEach(([id, ch], slot) => { if (id && Math.random() < Math.min(1, ch * dropMul)) { drops.push(id); addItem(this.S, id, 1); this.S.dropSeen[u.id + ':' + slot] = 1; } });
     }
     this.S.gil += gil;
     const { gainExp, gainBond } = await import('./party.js');

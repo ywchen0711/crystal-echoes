@@ -249,3 +249,6 @@ body.inbattle .tb-b { right: auto; left: 0; bottom: 0; width: 64px; height: 64px
 .gi-teach { margin-top: 4px; color: #e8c8ff; font-size: 12px; } .gi-teach small { color: var(--dim); }
 .gi .dim, .ch-info .dim { opacity: 0.5; }
 .b-etr { margin-left: 3px; font-size: 11px; } .b-etr i { font-style: normal; } .b-est { margin-left: 3px; color: #e8a0ff; font-size: 11px; }
+
+.bst img { float: right; image-rendering: pixelated; max-width: 45%; max-height: 120px; margin: 0 0 4px 6px; }
+.bst-drops div { display: flex; gap: 8px; } .bst-drops small { color: var(--dim); width: 3.6em; } .bst-drops em { margin-left: auto; color: var(--dim); font-style: normal; }

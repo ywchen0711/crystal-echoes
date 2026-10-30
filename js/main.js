@@ -74,7 +74,8 @@ class Game {
   }
   draw(scene, cam, focus, band, amount) {
     const q = this.S.settings.quality;
-    if (q === 0) { this.renderer.render(scene, cam); return; }
+    if (q === 0) { cam.layers.enableAll(); this.renderer.render(scene, cam); return; }
+    cam.layers.set(0);
     this.post.setScene(scene); this.post.setCamera(cam); this.post.tilt(focus, band, q === 2 ? amount : amount * 0.8);
     this.post.composer.render();
   }

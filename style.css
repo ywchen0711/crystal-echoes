@@ -42,7 +42,7 @@ body.attitle #hud, body.inbattle #hud, body.attitle #touch { display: none; }
 @keyframes dlgIn { from { transform: translateX(-50%) translateY(10px); opacity: 0; } }
 #dialog.narr { z-index: 52; background: rgba(0, 0, 0, 0.72); border-color: transparent; box-shadow: none; text-align: center; justify-content: center; }
 #dialog.narr .dl-text { font-family: var(--serif); font-size: 20px; }
-.dl-face { width: 80px; height: 72px; image-rendering: auto; object-fit: cover; border: 2px solid var(--line2); border-radius: 4px; background: radial-gradient(circle, #3a4a7a, #141a34); flex: none; }
+.dl-face { width: 80px; height: 72px; image-rendering: pixelated; object-fit: cover; border: 2px solid var(--line2); border-radius: 4px; background: radial-gradient(circle, #3a4a7a, #141a34); flex: none; }
 .dl-body { flex: 1; position: relative; }
 .dl-name { display: inline-block; font-weight: 700; color: var(--gold); font-size: 16px; margin-bottom: 6px; padding: 0 10px 2px; border-bottom: 1px solid var(--line2); }
 .dl-text { font-size: 19px; line-height: 1.65; min-height: 60px; text-shadow: 0 1px 1px #000; }
@@ -260,5 +260,5 @@ body.inbattle .tb-b { right: auto; left: 0; bottom: 0; width: 64px; height: 64px
 .bst-drops div { display: flex; gap: 8px; } .bst-drops small { color: var(--dim); width: 3.6em; } .bst-drops em { margin-left: auto; color: var(--dim); font-style: normal; }
 
 .ch-info:empty { display: none; }
-.ch-title, .bc-title { color: #ffffff; } .ch-it img { width: 30px; height: 30px; image-rendering: auto; object-fit: contain; }
-.ps-row img { width: 48px; height: 72px; image-rendering: auto; object-fit: contain; } .st-big { image-rendering: auto !important; }
+.ch-title, .bc-title { color: #ffffff; } .ch-it img { width: 30px; height: 27px; image-rendering: pixelated; object-fit: contain; }
+.ps-row img { width: 48px; height: 76px; image-rendering: pixelated; object-fit: contain; } .st-big { image-rendering: pixelated !important; object-fit: contain; }

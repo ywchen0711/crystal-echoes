@@ -6,6 +6,10 @@ import { UnrealBloomPass } from '../lib/addons/UnrealBloomPass.js';
 import { OutputPass } from '../lib/addons/OutputPass.js';
 import { ShaderPass } from '../lib/addons/ShaderPass.js';
 import { texFrom } from './pixel.js';
+import { Pass, FullScreenQuad } from '../lib/addons/Pass.js';
+
+// characters and monsters live on their own layer so they can be drawn as crisp, outlined pixel art
+export const CHAR_LAYER = 2;
 
 export { THREE };
 
@@ -45,6 +49,68 @@ const Grade = {
     }`,
 };
 
+// Draws the character layer into a small render target (so every model becomes chunky pixels),
+// then lays it over the full-size scene with a dark one-pixel outline and a little colour banding.
+const PixelComposite = {
+  uniforms: { tDiffuse: { value: null }, tChar: { value: null }, low: { value: new THREE.Vector2(1, 1) }, outline: { value: new THREE.Vector3(0.035, 0.025, 0.07) }, levels: { value: 14 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse, tChar; uniform vec2 low; uniform vec3 outline; uniform float levels; varying vec2 vUv;
+    void main(){
+      vec4 base = texture2D(tDiffuse, vUv);
+      vec2 px = 1.0 / low; vec2 uv = (floor(vUv * low) + 0.5) * px;
+      vec4 c = texture2D(tChar, uv);
+      if (c.a < 0.5) {
+        float n = max(max(texture2D(tChar, uv + vec2(px.x, 0.0)).a, texture2D(tChar, uv - vec2(px.x, 0.0)).a), max(texture2D(tChar, uv + vec2(0.0, px.y)).a, texture2D(tChar, uv - vec2(0.0, px.y)).a));
+        gl_FragColor = n > 0.5 ? vec4(mix(base.rgb, outline, 0.88), base.a) : base;
+        return;
+      }
+      vec3 g = sqrt(max(c.rgb, 0.0));
+      g = floor(g * levels + 0.5) / levels;
+      gl_FragColor = vec4(g * g, 1.0);
+    }`,
+};
+export class PixelCharPass extends Pass {
+  constructor(scene, camera) {
+    super();
+    this.scene = scene; this.camera = camera; this.factor = 3; this.enabled = true;
+    this.rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+    this.depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
+    this.mat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(PixelComposite.uniforms), vertexShader: PixelComposite.vertexShader, fragmentShader: PixelComposite.fragmentShader, depthTest: false, depthWrite: false });
+    this.quad = new FullScreenQuad(this.mat);
+    this.tick = 0; this.w = 1; this.h = 1;
+  }
+  setSize(w, h) {
+    this.w = w; this.h = h;
+    // aim for characters roughly 40-50 pixels tall, like Octopath's sprites
+    this.factor = Math.max(2, Math.round(h / 230));
+    const lw = Math.max(1, Math.floor(w / this.factor)), lh = Math.max(1, Math.floor(h / this.factor));
+    this.rt.setSize(lw, lh); this.mat.uniforms.low.value.set(lw, lh);
+  }
+  // lights and the sun's shadow camera must see the character layer too
+  prepLights() {
+    if (this.scene.userData.pxPrepped && this.tick++ % 90) return;
+    this.scene.userData.pxPrepped = true;
+    this.scene.traverse((o) => { if (o.isLight) { o.layers.enable(CHAR_LAYER); if (o.shadow?.camera) o.shadow.camera.layers.enable(CHAR_LAYER); } });
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    const cam = this.camera, scene = this.scene;
+    this.prepLights();
+    const oldMask = cam.layers.mask, oldBg = scene.background, oldClear = renderer.getClearColor(new THREE.Color()), oldA = renderer.getClearAlpha(), oldAuto = renderer.autoClear;
+    renderer.setRenderTarget(this.rt);
+    renderer.setClearColor(0x000000, 0); renderer.clear(true, true, true);
+    renderer.autoClear = false; scene.background = null;
+    const oldShadow = renderer.shadowMap.autoUpdate; renderer.shadowMap.autoUpdate = false; // shadows were already drawn this frame
+    // 1) the world (cut-out leaves and all) for its depth, then wipe the colour so only depth remains
+    cam.layers.set(0); renderer.render(scene, cam); renderer.clear(true, false, false);
+    // 2) the characters in colour
+    cam.layers.set(CHAR_LAYER); renderer.render(scene, cam);
+    renderer.shadowMap.autoUpdate = oldShadow; cam.layers.mask = oldMask; scene.background = oldBg; renderer.autoClear = oldAuto; renderer.setClearColor(oldClear, oldA);
+    this.mat.uniforms.tDiffuse.value = readBuffer.texture; this.mat.uniforms.tChar.value = this.rt.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.quad.render(renderer);
+  }
+}
+
 export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -59,6 +125,7 @@ export function createPost(renderer, scene, camera) {
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
   const composer = new EffectComposer(renderer, rt);
   const rp = new RenderPass(scene, camera); composer.addPass(rp);
+  const px = new PixelCharPass(scene, camera); composer.addPass(px);
   const bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.5, 0.5, 0.82); composer.addPass(bloom);
   const tsH = new ShaderPass(TiltShift), tsV = new ShaderPass(TiltShift);
   tsV.uniforms.dir.value.set(0, 1);
@@ -66,15 +133,16 @@ export function createPost(renderer, scene, camera) {
   composer.addPass(new OutputPass());
   const grade = new ShaderPass(Grade); composer.addPass(grade);
   const api = {
-    composer, bloom, grade, tsH, tsV, rp,
+    composer, bloom, grade, tsH, tsV, rp, px,
     setSize(w, h) {
       composer.setSize(w, h);
       const s = renderer.getDrawingBufferSize(new THREE.Vector2());
+      px.setSize(s.x, s.y);
       tsH.uniforms.res.value.copy(s); tsV.uniforms.res.value.copy(s);
     },
     tilt(focus, band, amount) { for (const p of [tsH, tsV]) { p.uniforms.focus.value = focus; p.uniforms.band.value = band; p.uniforms.amount.value = amount; } },
-    setCamera(cam) { rp.camera = cam; },
-    setScene(sc) { rp.scene = sc; },
+    setCamera(cam) { rp.camera = cam; px.camera = cam; },
+    setScene(sc) { rp.scene = sc; px.scene = sc; },
   };
   api.setSize(size.x / renderer.getPixelRatio(), size.y / renderer.getPixelRatio());
   return api;

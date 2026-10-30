@@ -1203,7 +1203,7 @@ class BattleUI {
       this.pt.onclick = (e) => { const el = e.target.closest('.b-pc'); if (!el) return; const tu = b.party.find(p => p.id === el.dataset.id); if (tu) this.pickHook(tu); };
       // tapping the 3D sprites
       G.tapHook = (nx, ny) => {
-        const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(nx, ny), b.camera);
+        const ray = new THREE.Raycaster(); ray.layers.enableAll(); ray.setFromCamera(new THREE.Vector2(nx, ny), b.camera);
         const hit = ray.intersectObjects(pool.map(p => p.spr.mesh), true)[0];
         if (hit) { let o = hit.object; let tu; while (o && !(tu = pool.find(p => p.spr.mesh === o))) o = o.parent; if (tu) this.pickHook(tu); }
       };

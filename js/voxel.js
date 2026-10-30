@@ -2,6 +2,8 @@
 // out of small cubes so they have depth, turn smoothly and swing their arms and legs.
 import * as THREE from '../lib/three.module.min.js';
 import { shade, mix } from './pixel.js';
+const CHAR_LAYER = 2;
+const toLayer = (root) => root.traverse((o) => o.layers.set(CHAR_LAYER));
 
 const VS = 1.75 / 46; // world units per voxel (a person is about 46 voxels tall)
 const LEG = 17;       // leg length in voxels
@@ -354,6 +356,7 @@ export class VoxelPerson {
     this.ang = opts.angle ?? 0; this.angT = this.ang;
     this.moving = false; this.phase = 0;
     this.mesh.rotation.y = 0; this.body.rotation.y = this.ang;
+    toLayer(this.mesh);
   }
   // battle pose by BPOSE index
   setFrame(i) { this.frame = i; if (this.battle) this.target = { ...(POSES[i] || POSES[0]) }; }
@@ -397,16 +400,17 @@ const slabCache = new Map();
 let PR = null;
 export function renderPortrait(look, mode = 'face') {
   if (!look) return '';
-  const W = 160, H = mode === 'face' ? 144 : 256;
+  const W = mode === 'face' ? 40 : 48, H = mode === 'face' ? 36 : 76;
   if (!PR) {
     const canvas = document.createElement('canvas');
-    const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
+    const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, preserveDrawingBuffer: true });
     r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.1;
     const scene = new THREE.Scene();
     scene.add(new THREE.HemisphereLight('#e4ecff', '#3a3050', 1.5));
     const key = new THREE.DirectionalLight('#fff2dc', 2.8); key.position.set(2.5, 3, 4); scene.add(key);
     const rim = new THREE.DirectionalLight('#9ab8ff', 2.4); rim.position.set(-3, 2.5, -3); scene.add(rim);
     PR = { r, scene, cam: new THREE.PerspectiveCamera(22, 1, 0.1, 50) };
+    PR.cam.layers.enableAll(); scene.traverse((o) => o.layers.enableAll());
   }
   const { r, scene, cam } = PR;
   r.setSize(W, H, false); cam.aspect = W / H; cam.updateProjectionMatrix();
@@ -419,7 +423,19 @@ export function renderPortrait(look, mode = 'face') {
   if (mode === 'face') { cam.position.set(0.25, headY + 0.08, 1.9); cam.lookAt(0, headY, 0); }
   else { cam.position.set(0.5, 1.0, 6.0); cam.lookAt(0, 0.92, 0); }
   r.render(scene, cam);
-  const url = r.domElement.toDataURL();
+  // scale up 4x with hard edges and a dark outline, like a hand-made sprite
+  const k = 4, src = r.domElement, out = document.createElement('canvas'); out.width = W * k; out.height = H * k;
+  const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; const tg = tmp.getContext('2d'); tg.drawImage(src, 0, 0);
+  const id = tg.getImageData(0, 0, W, H), d = id.data, a = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? 0 : d[(y * W + x) * 4 + 3];
+  const o = tg.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    if (d[i + 3] > 128) { for (let c = 0; c < 3; c++) o.data[i + c] = Math.round(d[i + c] / 18) * 18; o.data[i + 3] = 255; }
+    else if (a(x + 1, y) > 128 || a(x - 1, y) > 128 || a(x, y + 1) > 128 || a(x, y - 1) > 128) { o.data[i] = 14; o.data[i + 1] = 10; o.data[i + 2] = 26; o.data[i + 3] = 255; }
+  }
+  tg.putImageData(o, 0, 0);
+  const og = out.getContext('2d'); og.imageSmoothingEnabled = false; og.drawImage(tmp, 0, 0, W * k, H * k);
+  const url = out.toDataURL();
   scene.remove(v.mesh); v.dispose();
   return url;
 }
@@ -434,7 +450,7 @@ export class VoxelSprite {
     this.glow = opts.glow ?? 0.16; this.mat = voxelMaterial(this.glow);
     this.inner = new THREE.Mesh(geo, this.mat); this.inner.castShadow = true;
     const k = this.scale / 16; this.inner.scale.setScalar(k); this.inner.position.y = 0.5 * k;
-    this.mesh = new THREE.Group(); this.mesh.add(this.inner);
+    this.mesh = new THREE.Group(); this.mesh.add(this.inner); toLayer(this.mesh);
     this.w = px.w * k; this.h = px.h * k;
     this.frame = 0;
   }

@@ -3,6 +3,7 @@ import * as THREE from '../lib/three.module.min.js';
 import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js';
 import { parseMap, buildMap, groundAt } from './mapbuild.js';
 import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js';
+import { VoxelPerson } from './voxel.js';
 import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js';
 import { HEROES, ECHOES } from './data.js';
 
@@ -26,9 +27,7 @@ export function lookOf(look) {
   return LOOKS[look] || HEROES[look]?.look || ECHOES[look]?.look || LOOKS.boy;
 }
 export function personSprite(look) {
-  const L = lookOf(look); const key = JSON.stringify(L);
-  let canvas = sheetCache.get(key); if (!canvas) { canvas = personSheet(L); sheetCache.set(key, canvas); }
-  return new Sprite(canvas, 12, { scale: 1 });
+  return new VoxelPerson(lookOf(look));
 }
 // little round critters for hide and seek
 function moguSheet() {
@@ -136,9 +135,10 @@ export class Field {
     return { root, spr, x: 0, z: 0, y: 0, dir: 'down', anim: 0, moving: false };
   }
   setLeader(look) { if (!this.player) return; const { x, z, dir } = this.player; this.scene.remove(this.player.root); this.player = this.makeWalker(look); this.placePlayer(x, z, dir); }
-  placePlayer(x, z, dir) { const p = this.player; p.x = x + 0.5; p.z = z + 0.5; p.dir = dir; p.y = groundAt(this.map, p.x, p.z); this.syncWalker(p); }
+  placePlayer(x, z, dir) { const p = this.player; p.x = x + 0.5; p.z = z + 0.5; p.dir = dir; p.ang = null; p.y = groundAt(this.map, p.x, p.z); this.syncWalker(p); p.spr.snapFacing?.(); }
   syncWalker(w) {
     w.root.position.set(w.x, w.y + (w.hop || 0), w.z);
+    if (w.spr.walk) { w.spr.walk(w.ang ?? w.dir, w.moving, w.anim * 1.5); return; }
     const base = { down: 0, up: 3, left: 6, right: 9 }[w.dir] || 0;
     const step = w.moving ? [1, 0, 2, 0][Math.floor(w.anim * 6) % 4] : 0;
     w.spr.setFrame(base + step);
@@ -148,7 +148,7 @@ export class Field {
     w.x = o.x + 0.5; w.z = o.z + 0.5; w.y = groundAt(this.map, w.x, w.z); w.dir = o.dir || 'down';
     w.def = o; w.home = [w.x, w.z]; w.wt = Math.random() * 3;
     if (o.bubble || this.G.npcBubble?.(o)) { const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.bubbles[this.G.npcBubble?.(o) || '...'], depthTest: true })); b.scale.set(0.6, 0.5, 1); b.position.y = 2.25; w.root.add(b); w.bubble = b; }
-    this.syncWalker(w); this.npcs.push(w);
+    this.syncWalker(w); w.spr.snapFacing?.(); this.npcs.push(w);
     return w;
   }
   removeNpc(id) { const i = this.npcs.findIndex(n => n.def.id === id); if (i >= 0) { this.scene.remove(this.npcs[i].root); this.npcs.splice(i, 1); } }
@@ -201,6 +201,7 @@ export class Field {
         ix /= Math.max(1, len); iy /= Math.max(1, len);
         const sp = (this.mount === 'airship' ? 9 : this.mount === 'bird' ? 7 : input.run ? 5.6 : 4.0) * dt;
         p.dir = Math.abs(ix) > Math.abs(iy) ? (ix > 0 ? 'right' : 'left') : (iy > 0 ? 'down' : 'up');
+        p.ang = Math.atan2(ix, iy);
         const ox = p.x, oz = p.z, oc = this.cellKey(p);
         moved = this.tryMove(p, ix * sp, iy * sp);
         if (moved) {
@@ -220,7 +221,7 @@ export class Field {
         n.wt -= dt;
         if (n.wt < 0) { n.wt = 1.5 + Math.random() * 3; n.go = Math.random() < 0.6 ? [['up', 0, -1], ['down', 0, 1], ['left', -1, 0], ['right', 1, 0]][Math.random() * 4 | 0] : null; n.gt = 0.4 + Math.random() * 0.8; }
         if (n.go && n.gt > 0) {
-          n.gt -= dt; n.dir = n.go[0];
+          n.gt -= dt; n.dir = n.go[0]; n.ang = null;
           const nx = n.x + n.go[1] * dt * 1.6, nz = n.z + n.go[2] * dt * 1.6;
           if (Math.hypot(nx - n.home[0], nz - n.home[1]) < 2.5 && this.tryMove(n, n.go[1] * dt * 1.6, n.go[2] * dt * 1.6)) { n.moving = true; n.anim += dt; } else { n.moving = false; n.go = null; }
         } else n.moving = false;
@@ -228,6 +229,8 @@ export class Field {
       if (n.scripted) { /* moved by an event */ }
       this.syncWalker(n);
     }
+    if (p) p.spr.tick?.(dt);
+    for (const n of this.npcs) n.spr.tick?.(dt);
     // camera
     this.updateCamera(dt);
     // lights near the camera
@@ -252,7 +255,7 @@ export class Field {
     const p = this.player, k = 1 - Math.exp(-dt * 6);
     this.cam.x += (p.x - this.cam.x) * k; this.cam.z += (p.z - this.cam.z) * k; this.cam.y += (p.y - this.cam.y) * k;
     const far = this.world ? (this.mount === 'airship' ? 1.5 : 1.15) : this.def.interior ? 0.85 : 1;
-    const dist = 13.5 * far, pitch = this.world ? 0.82 : 0.68;
+    const dist = (this.world ? 13.5 : 11.5) * far * (this.zoom || 1), pitch = this.world ? 0.82 : 0.68;
     this.camera.position.set(this.cam.x, this.cam.y + Math.sin(pitch) * dist + 0.8, this.cam.z + Math.cos(pitch) * dist);
     this.camera.lookAt(this.cam.x, this.cam.y + 0.9, this.cam.z - 0.4);
     // sun and its shadow box follow the player
@@ -316,7 +319,7 @@ export class Field {
     for (const n of this.npcs) if (Math.hypot(n.x - fx2, n.z - fz2) < 0.7) return { kind: 'npc', npc: n };
     return null;
   }
-  face(w, target) { const dx = target.x - w.x, dz = target.z - w.z; w.dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'right' : 'left') : (dz > 0 ? 'down' : 'up'); this.syncWalker(w); }
+  face(w, target) { const dx = target.x - w.x, dz = target.z - w.z; w.ang = Math.atan2(dx, dz); w.dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'right' : 'left') : (dz > 0 ? 'down' : 'up'); this.syncWalker(w); }
 
   // move a walker (NPC or player) along a path for cutscenes
   async walk(w, pts, speed = 3) {
@@ -327,7 +330,7 @@ export class Field {
         const dt = await this.G.frame();
         const dx = gx - w.x, dz = gz - w.z, d = Math.hypot(dx, dz), s = Math.min(d, speed * dt);
         w.x += dx / d * s; w.z += dz / d * s; w.y = groundAt(this.map, w.x, w.z);
-        w.dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'right' : 'left') : (dz > 0 ? 'down' : 'up');
+        w.dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'right' : 'left') : (dz > 0 ? 'down' : 'up'); w.ang = Math.atan2(dx, dz);
         w.moving = true; w.anim += dt; this.syncWalker(w);
       }
     }

@@ -141,7 +141,7 @@ class Game {
         if (d.inn) await this.story.TALK[d.id]?.();
         else if (this.story.TALK[d.id]) await this.story.TALK[d.id]();
         else await this.ui.say('', '……', d.look);
-        n.talking = false; if (!d.wander) { n.dir = prevDir; f.syncWalker(n); }
+        n.talking = false; if (!d.wander) { n.dir = prevDir; n.ang = null; f.syncWalker(n); }
         f.refreshBubbles();
       } else if (it.kind === 'chest') {
         if (it.open) { await this.ui.say('', '寶箱是空的。', null); }

@@ -2,6 +2,7 @@
 import * as THREE from '../lib/three.module.min.js';
 import { Sprite, Particles, skyDome, blobShadow } from './render.js';
 import { battleSheet, monsterPx, propPx, tileTex, texFrom, BPOSE } from './pixel.js';
+import { VoxelPerson, VoxelSprite } from './voxel.js';
 import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js';
 import { heroStats, skillsOf, weaponType, addItem, itemName } from './party.js';
 import { lookOf } from './field.js';
@@ -80,7 +81,7 @@ export class Battle {
     const slots = [[2.9, -1.9], [3.9, -0.65], [4.9, 0.6], [5.9, 1.85]];
     P.forEach((id, i) => {
       const h = this.S.heroes[id], st = heroStats(this.S, id);
-      const spr = new Sprite(battleSheet(lookOf(id)), 10, { scale: 1.25 });
+      const spr = new VoxelPerson(lookOf(id), { scale: 1.25, battle: true, angle: -Math.PI / 2 + 0.45, glow: 0.12 });
       const u = { side: 'party', id, name: HEROES[id].name, hero: id, lv: h.lv, st, hp: Math.max(0, Math.min(h.hp, st.hp)), mp: Math.min(h.mp, st.mp), wpn: weaponType(this.S, id), on: h.on || [], echo: h.echo, limit: h.limit || 0, buffs: {}, status: {}, spr, home: slots[i], survived: false, color: HEROES[id].color, immune: h.equip.x === 'x_ribbon' };
       u.alive = u.hp > 0;
       this.addSprite(u, slots[i][0], slots[i][1]);
@@ -94,7 +95,7 @@ export class Battle {
       const E = ENEMIES[eid]; count[eid] = (count[eid] || 0) + 1;
       let px = monsterPx(E.kind, E.colors); if (E.kind !== 'knight') px = px.flip();
       const scale = (E.boss ? 1.25 : 1.05) * (E.scale || 1);
-      const spr = new Sprite(px.canvas(), 1, { scale });
+      const spr = new VoxelSprite(px, { scale });
       const st = { hp: E.hp, mp: 999, atk: E.atk, def: E.def, mag: E.mag, spr: E.spr, spd: E.spd };
       if (opts.hard) for (const k of ['hp', 'atk', 'def', 'mag', 'spr']) st[k] = Math.round(st[k] * opts.hard);
       const u = { side: 'enemy', id: eid, E, name: E.name + (troop.filter(t => t === eid).length > 1 ? letters[count[eid] - 1] : ''), lv: E.lv, st, hp: st.hp, mp: 999, shield: E.shield, maxShield: E.shield, weak: E.weak, resist: E.resist || [], revealed: new Set(this.S.flags['seen_' + eid] || []), buffs: {}, status: {}, spr, alive: true, broken: false, brokenUntil: -1, boss: !!E.boss, home: eslots[i] };
@@ -103,7 +104,7 @@ export class Battle {
     });
   }
   addSprite(u, x, z) {
-    u.spr.mesh.position.set(x, 0, z); u.spr.mesh.rotation.x = -0.12;
+    u.spr.mesh.position.set(x, 0, z); if (!u.spr.voxel) u.spr.mesh.rotation.x = -0.12; else if (u.side === 'enemy') u.spr.mesh.rotation.y = 0.4;
     u.shadow = blobShadow(u.side === 'enemy' ? 0.3 * u.spr.w : 0.5); u.shadow.position.set(x, 0.02, z);
     this.scene.add(u.spr.mesh, u.shadow);
     u.x = x; u.z = z; u.y = 0; u.ox = 0; u.oy = 0; u.flash = 0;
@@ -502,10 +503,9 @@ export class Battle {
     await this.ui.banner(D.name, '召喚', '#ffb04a');
     let px = monsterPx(D.look, D.colors); if (D.look !== 'knight') px = px.flip().flip();
     // summons face the enemies (left), their art already faces left
-    const spr = new Sprite(px.canvas(), 1, { scale: 2.3 });
-    spr.mat.emissive = new THREE.Color('#ffffff'); spr.mat.emissiveMap = spr.tex; spr.mat.emissiveIntensity = 0.25;
+    const spr = new VoxelSprite(px, { scale: 2.3, glow: 0.4 });
     const su = { side: 'summon', sid, D, name: D.name, spr, st: { atk: u.st.mag * 1.1, mag: u.st.mag * 1.2, spd: u.st.spd, hp: 1, def: 0, spr: 0 }, buffs: {}, status: {}, alive: true, turns: 0, on: [], x: 7, z: -0.5, y: 0, ox: 0, oy: 0, flash: 0 };
-    spr.mesh.position.set(7, 0, -0.5); this.scene.add(spr.mesh);
+    spr.mesh.position.set(7, 0, -0.5); spr.mesh.rotation.y = -0.4; this.scene.add(spr.mesh);
     this.summonU = su;
     this.fx.emit({ x: 7, y: 1.5, z: -0.5, n: 80, color: '#ffe0a0', speed: 4, life: 1.2, size: 0.35, gravity: -1 });
     this.G.audio.sfx('summon');
@@ -640,10 +640,11 @@ export class Battle {
       const breathe = u.side === 'party' && u.alive && !u.ox ? Math.sin(this.t * 3 + u.x) * 0.02 : 0;
       let sx = 0; if (u.shakeT > 0) { u.shakeT -= dt; sx = Math.sin(u.shakeT * 80) * 0.08; }
       const bob = u.side === 'enemy' && u.alive && !u.broken && (u.E.kind === 'bat' || u.E.kind === 'bird' || u.E.kind === 'wisp') ? 0.6 + Math.sin(this.t * 4 + u.x) * 0.15 : u.side === 'summon' ? 0.4 + Math.sin(this.t * 2) * 0.15 : 0;
-      u.spr.mesh.position.set(u.x + (u.ox || 0) + sx, (u.oy || 0) + bob + breathe, u.z);
+      u.spr.tick?.(dt);
+      u.spr.mesh.position.set(u.x + (u.ox || 0) + sx, (u.oy || 0) + bob + (u.spr.voxel && u.side === 'party' ? 0 : breathe), u.z);
       if (u.shadow) { u.shadow.position.set(u.x + (u.ox || 0), 0.02, u.z); u.shadow.visible = u.spr.mesh.visible && !u.jumping; }
-      if (u.flash > 0) { u.flash = Math.max(0, u.flash - dt * 4); const f = Math.max(0.18, u.flash); u.spr.mat.emissive.setRGB(f, f, f); }
-      else if (u.side !== 'summon') u.spr.mat.emissive.setRGB(0.18, 0.18, 0.18);
+      if (u.flash > 0) { u.flash = Math.max(0, u.flash - dt * 4); const f = Math.max(u.spr.glow ?? 0.18, u.flash); u.spr.mat.emissive.setRGB(f, f, f); }
+      else if (u.side !== 'summon') { const g = u.spr.glow ?? 0.18; u.spr.mat.emissive.setRGB(g, g, g); }
       if (u.side === 'enemy' && u.broken && u.alive) u.spr.mesh.rotation.z = 0.2 + Math.sin(this.t * 6) * 0.03; else if (u.side === 'enemy') u.spr.mesh.rotation.z = 0;
       if (u.side === 'party' && u.alive && !this.current && u.spr.frame <= 1) u.spr.setFrame(Math.floor(this.t * 1.6 + u.x) % 2 ? BPOSE.idle2 : BPOSE.idle);
       if (u.side === 'party' && u.alive && u.hp < u.st.hp * 0.25 && u.spr.frame <= 1) u.spr.setFrame(BPOSE.hurt);
@@ -894,8 +895,8 @@ class BattleUI {
       // tapping the 3D sprites
       G.tapHook = (nx, ny) => {
         const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2(nx, ny), b.camera);
-        const hit = ray.intersectObjects(pool.map(p => p.spr.mesh))[0];
-        if (hit) { const tu = pool.find(p => p.spr.mesh === hit.object); this.pickHook(tu); }
+        const hit = ray.intersectObjects(pool.map(p => p.spr.mesh), true)[0];
+        if (hit) { let o = hit.object; let tu; while (o && !(tu = pool.find(p => p.spr.mesh === o))) o = o.parent; if (tu) this.pickHook(tu); }
       };
       set();
     }).finally(() => { G.tapHook = null; });

@@ -1,6 +1,6 @@
 // Menus and windows: dialogue, choices, the main menu, shops, inns, notices and little overlays.
 import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js';
-import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands } from './party.js';
+import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook } from './party.js';
 import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js';
 import { ENEMIES } from './data.js';
 import { monsterPx } from './pixel.js';
@@ -128,6 +128,7 @@ export class UI {
       if (i === 11) await this.settingsMenu();
     }
     this.hud();
+    if (this.G.field?.player && this.G.mode === 'field') this.G.field.setLeader(S.party[0]);
   }
   partySummary() {
     const S = this.S;
@@ -250,9 +251,16 @@ export class UI {
       if (best !== cur) equip(S, id, sl, best);
     }
   }
+  // the paper doll wearing a piece (or nothing in that slot), without keeping it
+  tryOnLook(id, slot, g) {
+    const h = this.S.heroes[id], eq = { ...h.equip }; eq[slot] = g; const G = GEAR[g]; const other = slot === 'R' ? 'L' : slot === 'L' ? 'R' : null;
+    if (other && G && (G.hands === 2 || GEAR[eq[other]]?.hands === 2)) eq[other] = null;
+    return paperLook(this.S, id, eq);
+  }
   compareWith(id, slot, g) {
     const before = heroStats(this.S, id), after = this.tryOn(id, slot, g);
-    return `<div class="cmp">${['hp', 'mp', 'atk', 'def', 'mag', 'spr', 'spd'].map(k => { const d = after[k] - before[k]; return `<div><span>${({ hp: 'HP', mp: 'MP', atk: '攻擊', def: '防禦', mag: '魔力', spr: '精神', spd: '速度' })[k]}</span><b>${before[k]}</b>→<b class="${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${after[k]}</b></div>`; }).join('')}</div>`;
+    const now = fullSprite(paperLook(this.S, id)), next = fullSprite(this.tryOnLook(id, slot, g));
+    return `<div class="pd-row"><figure><img src="${now}"><figcaption>現在</figcaption></figure><span>▶</span><figure><img src="${next}"><figcaption>試穿</figcaption></figure></div><div class="cmp">${['hp', 'mp', 'atk', 'def', 'mag', 'spr', 'spd'].map(k => { const d = after[k] - before[k]; return `<div><span>${({ hp: 'HP', mp: 'MP', atk: '攻擊', def: '防禦', mag: '魔力', spr: '精神', spd: '速度' })[k]}</span><b>${before[k]}</b>→<b class="${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${after[k]}</b></div>`; }).join('')}</div>`;
   }
   compare(id, slot, g) { return this.compareWith(id, slot, g); }
   async magicMenu() {

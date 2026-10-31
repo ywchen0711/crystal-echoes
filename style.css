@@ -262,3 +262,5 @@ body.inbattle .tb-b { right: auto; left: 0; bottom: 0; width: 64px; height: 64px
 .ch-info:empty { display: none; }
 .ch-title, .bc-title { color: #ffffff; } .ch-it img { width: 30px; height: 27px; image-rendering: pixelated; object-fit: contain; }
 .ps-row img { width: 48px; height: 76px; image-rendering: pixelated; object-fit: contain; } .st-big { image-rendering: pixelated !important; object-fit: contain; }
+
+.pd-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; } .pd-row figure { margin: 0; text-align: center; } .pd-row img { width: 72px; height: 114px; image-rendering: pixelated; object-fit: contain; background: radial-gradient(circle at 50% 70%, rgba(255,255,255,0.12), transparent 70%); border-radius: 6px; } .pd-row figcaption { font-size: 11px; color: var(--dim); } .pd-row span { color: var(--dim); }

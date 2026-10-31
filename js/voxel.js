@@ -122,7 +122,7 @@ function partsFor(s) {
 
   // arms: pivot at the shoulder; the hand is at local y -10
   const arm = new VGrid();
-  arm.fill(-1, 1, -11, 0, -1, 1, (x, y, z) => !(y === 0 && Math.abs(x) === 1 && Math.abs(z) === 1) && !(y === -11 && Math.abs(x) === 1 && Math.abs(z) === 1), (x, y) => y <= -9 ? skin : y === -8 ? shade(T, -0.25) : y >= -1 ? shade(T, 0.08) : T);
+  arm.fill(-1, 1, -11, 0, -1, 1, (x, y, z) => !(y === 0 && Math.abs(x) === 1 && Math.abs(z) === 1) && !(y === -11 && Math.abs(x) === 1 && Math.abs(z) === 1), (x, y) => y <= -9 ? (s.gloves ? (y === -9 ? shade(s.gloves, 0.15) : s.gloves) : skin) : y === -8 ? (s.gloves ? shade(s.gloves, -0.2) : shade(T, -0.25)) : y >= -1 ? shade(T, 0.08) : T);
   if (s.pauldron) arm.fill(-2, 2, -3, 1, -2, 2, (x, y, z) => !(y === 1 && (Math.abs(x) === 2 || Math.abs(z) === 2)), (x, y) => y === -3 ? shade(s.pauldron, -0.3) : y === 1 ? shade(s.pauldron, 0.25) : s.pauldron);
   P.arm = arm;
 
@@ -237,7 +237,7 @@ function partsFor(s) {
   if (wp) P.weapon = wp;
   if (s.weaponL) { const wl = weaponGrid(s.weaponL); if (wl) P.weaponL = wl; }
   if (s.shield) {
-    const sh = new VGrid(), S = '#5a7ac8';
+    const sh = new VGrid(), S = s.shieldColor || '#5a7ac8';
     sh.fill(2, 3, -11, 4, -6, 6, (x, y, z) => (y + 3.5) ** 2 / 64 + z * z / 40 <= 1 && (x === 2 || (y + 3.5) ** 2 / 64 + z * z / 40 <= 0.62), (x, y, z) => (y + 3.5) ** 2 / 64 + z * z / 40 > 0.7 ? gold : x === 3 ? shade(S, 0.12) : S);
     sh.box(4, 4, -4, -3, -1, 0, gold);
     P.shield = sh;

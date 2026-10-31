@@ -211,3 +211,49 @@ export function togglePassive(S, id, p) {
 }
 export function ownedEchoes(S) { return ECHO_ORDER.filter(e => S.echoes[e]); }
 export { SUMMONS };
+
+// ---------------------------------------------------------------- paper doll: what a hero looks like in their gear
+const METAL_C = ['#b08850', '#8a8e98', '#aab2be', '#c4ccd8', '#9ad0ec', '#e8c050', '#e2d6b8', '#8a78f0'];
+const LEATHER_C = ['#c8b890', '#8a5a3a', '#6a4028', '#b0b4c0', '#a0c0e0', '#5a9a5c', '#3a7a62', '#b8a0e8'];
+const CLOTH_C = ['#e8e0d0', '#b84a64', '#c4d4ee', '#eef2fa', '#7ac0e4', '#4e9a62', '#9a3434', '#463a96'];
+export function gearColor(G) {
+  if (!G) return null;
+  const t = Math.max(0, Math.min(7, G.tier || 0));
+  if (G.color) return G.color;
+  if (G.style === 'light') return LEATHER_C[t];
+  if (G.style === 'robe') return CLOTH_C[t];
+  return METAL_C[t];
+}
+const darker = (hex, k) => { const n = parseInt(hex.slice(1), 16); const f = (v) => Math.max(0, Math.min(255, Math.round(v * k))).toString(16).padStart(2, '0'); return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255); };
+export function paperLook(S, id, equipOverride) {
+  const H = HEROES[id], h = S.heroes[id]; if (!H) return null;
+  const L = { ...H.look }; if (!h) return L;
+  const eq = equipOverride || h.equip, g = (sl) => GEAR[eq[sl]];
+  // hands: weapons and shields
+  const R = g('R'), Lh = g('L');
+  const wpn = [R, Lh].filter(x => x && x.type !== 'shield'), shield = [Lh, R].find(x => x?.type === 'shield');
+  L.weapon = wpn[0] ? (WTYPES[wpn[0].type]?.model ?? null) : null;
+  L.weaponL = wpn[1] ? (WTYPES[wpn[1].type]?.model ?? null) : null;
+  L.shield = !!shield; L.shieldColor = shield ? gearColor(shield) : undefined;
+  // head
+  const hd = g('head');
+  if (!hd) { delete L.hat; delete L.hatColor; }
+  else if (hd.style === 'heavy') { L.hat = 'helm'; L.hatColor = gearColor(hd); L.hatBand = H.look.cape || H.color; }
+  else if (hd.style === 'light') { L.hat = hd.tier % 3 === 2 ? 'band' : 'cap'; L.hatColor = gearColor(hd); }
+  else if (hd.style === 'robe') { L.hat = H.look.hat === 'wizard' ? 'wizard' : 'hood'; L.hatColor = gearColor(hd); L.hatBand = H.color; }
+  // body: the hero's signature colour stays as the shirt or trim under the armour
+  const bd = g('body');
+  if (bd && eq.body !== 'a_cloth') {
+    const c = gearColor(bd);
+    if (bd.style === 'heavy') { L.top = c; L.top2 = H.look.top; L.pauldron = darker(c, 1.1); L.robe = false; }
+    else if (bd.style === 'light') { L.top = c; L.top2 = H.look.top; L.robe = false; L.pauldron = undefined; }
+    else { L.top = c; L.top2 = H.look.top2 || H.color; L.robe = true; L.pauldron = undefined; }
+  }
+  const ar = g('arms'); if (ar) { L.gloves = gearColor(ar); if (ar.style === 'heavy' && !L.pauldron) L.pauldron = gearColor(ar); }
+  const ws = g('waist'); if (ws) L.belt = darker(gearColor(ws), 0.8);
+  const lg = g('legs'); if (lg) L.legs = darker(gearColor(lg), 0.9);
+  const ft = g('feet'); if (ft) L.boots = darker(gearColor(ft), 0.85);
+  const bk = g('back'); if (bk) L.cape = bk.style === 'heavy' ? (H.look.cape || darker(H.color, 0.7)) : darker(gearColor(bk), 0.95);
+  else if (!H.look.cape) delete L.cape;
+  return L;
+}

@@ -1,7 +1,7 @@
 // Crystal Echoes: wires the renderer, field, battles, menus, story and saving together.
 import * as THREE from '../lib/three.module.min.js';
 import { createRenderer, createPost } from './render.js';
-import { Field } from './field.js';
+import { Field, setHeroLook } from './field.js';
 import { Battle } from './battle.js';
 import { UI, fmtTime } from './ui.js';
 import { Audio } from './audio.js';
@@ -10,7 +10,7 @@ import { makeStory } from './story.js';
 import { MAPS } from './maps.js';
 import { HEROES, ITEMS, ENEMIES } from './data.js';
 import { BESTIARY_NEW } from './content.js';
-import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx } from './party.js';
+import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -35,6 +35,7 @@ class Game {
     this.input.bindTouch(document.getElementById('touch'));
     document.body.classList.toggle('touchy', this.input.touchy);
     this.canvas.addEventListener('click', (e) => { if (this.tapHook) { const r = this.canvas.getBoundingClientRect(); this.tapHook(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); } });
+    setHeroLook((id) => this.heroLook(id));
     this.input.on((k) => this.fieldKey(k));
     // drag on the scene (mouse, or the right side of a touch screen) to turn the camera
     { let drag = null;
@@ -305,6 +306,7 @@ class Game {
   autosave() { if (this.S.flags.intro_done && (this.field.def.town || this.field.def.world || this.field.def.interior)) { try { this.save(); localStorage.setItem(SAVE_KEY + '-auto', '1'); } catch (e) { } } }
   hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
   partyFx(id) { return gearFx(this.S, id); }
+  heroLook(id) { return this.S?.heroes?.[id] ? paperLook(this.S, id) : null; }
   loadSave() {
     try {
       const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;

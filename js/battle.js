@@ -82,8 +82,7 @@ export class Battle {
     const slots = [[2.9, -1.9], [3.9, -0.65], [4.9, 0.6], [5.9, 1.85]];
     P.forEach((id, i) => {
       const h = this.S.heroes[id], st = heroStats(this.S, id);
-      const hs0 = hands(this.S, id), shield0 = shieldOf(this.S, id).length > 0;
-      const look = { ...lookOf(id), weapon: hs0[0].unarmed ? null : (WTYPES[hs0[0].type]?.model ?? null), weaponL: hs0[1] ? (WTYPES[hs0[1].type]?.model ?? null) : null, shield: shield0 };
+      const look = lookOf(id);
       const spr = new VoxelPerson(look, { scale: 1.25, battle: true, angle: -Math.PI / 2 + 0.45, glow: 0.12 });
       const fx = gearFx(this.S, id), hs = hands(this.S, id), shields = shieldOf(this.S, id);
       const u = { side: 'party', id, name: HEROES[id].name, hero: id, lv: h.lv, st, hp: Math.max(0, Math.min(h.hp, st.hp)), mp: Math.min(h.mp, st.mp), wpn: hs[0].type, hands: hs, fx, on: h.on || [], echo: h.echo, limit: h.limit || 0, buffs: {}, status: {}, spr, home: slots[i], survived: false, color: HEROES[id].color, immuneSet: new Set(fx.immune || []), block: Math.min(0.6, shields.reduce((a, g) => a + (g.fx?.block || 0), 0)), mblock: shields.reduce((a, g) => a + (g.fx?.mblock || 0), 0), barrier: {} };

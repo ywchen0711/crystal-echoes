@@ -21,9 +21,12 @@ export const LIGHTS = {
 };
 
 const sheetCache = new Map();
+let heroLook = null;
+export function setHeroLook(f) { heroLook = f; }
 export function lookOf(look) {
   if (!look) return null;
   if (typeof look === 'object') return look;
+  if (heroLook && HEROES[look]) { const r = heroLook(look); if (r) return r; }
   return LOOKS[look] || HEROES[look]?.look || ECHOES[look]?.look || LOOKS.boy;
 }
 export function personSprite(look) {

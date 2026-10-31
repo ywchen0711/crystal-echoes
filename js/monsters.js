@@ -1,7 +1,7 @@
 // The big bestiary: classic RPG monster types (original names and art), each with recoloured cousins
 // that get stronger, the way monster families grow in old console RPGs.
-import { Px, ramp, shade, mix, rnd, registerMonster } from './pixel.js?v=13';
-import { ENEMIES, SKILLS } from './data.js?v=13';
+import { Px, ramp, shade, mix, rnd, registerMonster } from './pixel.js?v=14';
+import { ENEMIES, SKILLS } from './data.js?v=14';
 
 // ---------------------------------------------------------------- art (all face left; battle flips them)
 const D = {};

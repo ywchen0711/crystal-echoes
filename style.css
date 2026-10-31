@@ -388,3 +388,9 @@ body.inbattle .grind-banner { top: auto; bottom: calc(10px + var(--sb)); left: c
 
 .ch-desc.keep { min-height: 5em; }
 .grindmenu .ch-box { width: min(500px, calc(100vw - 20px)); } .grindmenu .ch-list { width: 100%; } .grindmenu .ch-it .ch-s { min-width: 9em; text-align: right; }
+
+/* the status hub */
+.statushub .ch-box { width: min(1060px, 96vw); }
+.sth .sth-bar { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 2px 0 4px; font-size: .92em; }
+.sth .sth-st { margin: 2px 0 4px; } .sth .sth-st td { padding: 1px 8px 1px 0; } .sth .sth-st td:nth-child(odd) { opacity: .7; }
+.sth .tags { margin: 3px 0; } .sth .dim { opacity: .6; }

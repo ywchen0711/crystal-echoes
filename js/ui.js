@@ -1,14 +1,14 @@
 // Menus and windows: dialogue, choices, the main menu, shops, inns, notices and little overlays.
-import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js?v=13';
-import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js?v=13';
-import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js?v=13';
-import { ENEMIES } from './data.js?v=13';
-import { GRIND_DEFAULT, GRIND_OPTS } from './grind.js?v=13';
-import { STATE_N, STATE_DESC, REACTIONS, PAIRS, SETS, setBonus, huntText, NEW_ECHOES } from './depth.js?v=13';
-import { monsterPx } from './pixel.js?v=13';
-import { personSheet, battleSheet } from './pixel.js?v=13';
-import { lookOf } from './field.js?v=13';
-import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js?v=13';
+import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js?v=14';
+import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js?v=14';
+import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js?v=14';
+import { ENEMIES } from './data.js?v=14';
+import { GRIND_DEFAULT, GRIND_OPTS } from './grind.js?v=14';
+import { STATE_N, STATE_DESC, REACTIONS, PAIRS, SETS, setBonus, huntText, NEW_ECHOES } from './depth.js?v=14';
+import { monsterPx } from './pixel.js?v=14';
+import { personSheet, battleSheet } from './pixel.js?v=14';
+import { lookOf } from './field.js?v=14';
+import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js?v=14';
 
 const $ = (s) => document.querySelector(s);
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -127,7 +127,7 @@ export class UI {
     for (;;) {
       this.hud();
       const save = async () => { if (G.canSave()) { G.save(); this.toast('已存檔'); G.audio.sfx('save'); } else this.toast('這裡無法存檔（請到存檔水晶旁）'); };
-      const opts = [['隊伍狀態', () => this.statusMenu()], ['迴響水晶', () => this.echoMenu()], ['能力配置', () => this.passiveMenu()], ['裝備', () => this.equipMenu()], ['魔法・戰技', () => this.magicMenu()], ['道具', () => this.itemMenu()],
+      const opts = [['狀態', () => this.statusHub()], ['迴響水晶', () => this.echoMenu()], ['能力配置', () => this.passiveMenu()], ['裝備', () => this.equipMenu()], ['魔法・戰技', () => this.magicMenu()], ['道具', () => this.itemMenu()],
         ['地圖', 'map'], ['自動練功', 'grind'], ['怪物圖鑑', () => this.bestiaryMenu()], ['委託任務', () => this.questMenu()], ['召喚獸', () => this.summonMenu()], ['隊伍編成', () => this.formationMenu()], ['戰術手冊', () => this.tacticsMenu()], ['存檔', save], ['設定', () => this.settingsMenu()], ['關閉選單', null]];
       const i = await this.choose(opts.map(([l]) => ({ label: l })), { title: `${G.mapName()}　<span class="gil">${S.gil} G</span>　<span class="tm">${fmtTime(S.time)}</span>`, info: this.partySummary(), start, cls: 'mainmenu' });
       start = Math.max(0, i);
@@ -160,6 +160,102 @@ export class UI {
       <div class="st-bio">${H.bio}</div></div></div>`;
   }
   async statusMenu() { const S = this.S; const list = [...S.party, ...S.reserve]; await this.choose(list.map(id => ({ label: HEROES[id].name, sub: 'Lv ' + S.heroes[id].lv, icon: portrait(id) })), { title: '隊伍狀態', info: (i) => this.statusHTML(list[i]) }); }
+
+  // ---------------------------------------------------------------- the status hub: everything about one hero, and every setting for them
+  fullStatusHTML(id) {
+    const S = this.S, h = S.heroes[id], st = heroStats(S, id), H = HEROES[id], fx = gearFx(S, id);
+    const sk = skillsOf(S, id), arts = artsOf(S, id), spells = spellsOf(S, id), hid = new Set(h.hide || []);
+    const E = h.echo ? ECHOES[h.echo] : null, e = h.echo ? S.echoes[h.echo] : null;
+    const pct = (v) => Math.round((v || 0) * 100) + '%';
+    const derived = [['會心', pct(0.05 + (fx.crit || 0))], ['閃避', pct(fx.evade)], ['格擋', pct(fx.block)], ['反擊', pct(fx.counter)], ['連擊', pct(fx.dbl)], ['吸血', pct(fx.drain)]].filter(([, v], i) => i === 0 || v !== '0%');
+    const res = Object.entries(fx.resist || {}).map(([k, v]) => `${ELEM[k] || k}${v < 0 ? '吸收' : v === 0 ? '無效' : '減半'}`);
+    const wt = [...new Set(hands(S, id).map(x => x.type))].filter(t => WTYPES[t]);
+    const sets = setBonus(EQUIP_SLOTS.map(sl => h.equip[sl]).filter(Boolean)).count;
+    const chip = (s) => `<span class="${hid.has(s) ? 'lock' : ''}">${SKILLS[s].name}</span>`;
+    return `<div class="st sth"><img class="st-big" src="${fullSprite(id, true)}"><div>
+      <h3 style="color:${H.color}">${H.name} <small>${H.title}　Lv ${h.lv}</small></h3>
+      <div class="sth-bar"><span>HP ${h.hp}/${st.hp}</span><span>MP ${h.mp}/${st.mp}</span><span>EXP ${h.exp}/${EXP_NEXT(h.lv)}</span><span>AP ${apUsed(S, id)}/${apCap(S, id)}</span><span>極限 ${h.limit || 0}%</span></div>
+      <table class="sth-st"><tr><td>攻擊</td><td>${st.atk}</td><td>防禦</td><td>${st.def}</td><td>魔力</td><td>${st.mag}</td></tr><tr><td>精神</td><td>${st.spr}</td><td>速度</td><td>${st.spd}</td><td>${derived[0][0]}</td><td>${derived[0][1]}</td></tr></table>
+      ${derived.length > 1 ? `<div class="tags">${derived.slice(1).map(([k, v]) => `<span>${k} ${v}</span>`).join('')}</div>` : ''}
+      ${res.length ? `<div class="tags">抗性：${res.map(r => `<span>${r}</span>`).join('')}</div>` : ''}
+      <div class="st-eq">${EQUIP_SLOTS.map(sl => `<span><small>${SLOT_N[sl]}</small>${GEAR[h.equip[sl]]?.name || (sl === 'L' && GEAR[h.equip.R]?.hands === 2 ? '（雙手）' : '—')}</span>`).join('')}</div>
+      <div class="st-fx">${fxText(fx).join('、') || '裝備沒有特殊效果'}</div>
+      ${Object.keys(sets).length ? `<div class="tags">套裝：${Object.entries(sets).map(([k, n]) => `<span class="${n >= 2 ? '' : 'lock'}">${SETS[k].name} ${n}/4</span>`).join('')}</div>` : ''}
+      ${wt.map(t => `<div class="gi-trait">${ICON[t] || ''} ${WTYPES[t].n} 熟練 Lv${masteryLv(S, id, t)}/5：${WTYPES[t].trait}</div>`).join('')}
+      <div>迴響：${E ? `<b style="color:${E.color}">${E.name}</b> ${'★'.repeat(e.star)} 羈絆${e.bond}　核心「${E.keyName}」` : '—'}</div>
+      <div class="tags">被動：${(h.on || []).map(p => `<span>${PASSIVES[p].name}</span>`).join('') || '—'}</div>
+      <div class="tags">技能：${[...sk.own, ...sk.echo].map(chip).join('') || '—'}</div>
+      <div class="tags">戰技：${arts.map(chip).join('') || '—'}</div>
+      <div class="tags">魔法：${spells.map(chip).join('') || '—'}</div>
+      <small class="dim">灰色的招式在戰鬥選單中隱藏，自動戰鬥也不會使用</small>
+      <div class="st-bio">${H.bio}</div></div></div>`;
+  }
+  async statusHub() {
+    const S = this.S; let id = await this.heroPick('狀態：選擇角色', true); if (!id) return;
+    let start = 0;
+    for (;;) {
+      const h = S.heroes[id], all = [...S.party, ...S.reserve], inParty = S.party.includes(id);
+      const sk = skillsOf(S, id), arts = artsOf(S, id), spells = spellsOf(S, id), hid = new Set(h.hide || []);
+      const shown = (l) => `${l.filter(s => !hid.has(s)).length}/${l.length}`;
+      const rows = [
+        ['裝備', `${EQUIP_SLOTS.filter(sl => h.equip[sl]).length} 件`, () => this.equipMenu(id)],
+        ['⚙ 換上最強裝備', '自動', async () => { this.optimize(id); this.G.audio.sfx('item'); this.toast('已換上最強裝備'); }],
+        ['迴響水晶', h.echo ? ECHOES[h.echo].short : '—', () => this.echoFor(id)],
+        ['能力配置（被動）', `AP ${apUsed(S, id)}/${apCap(S, id)}`, () => this.passiveMenu(id)],
+        ['魔法', shown(spells), () => this.skillToggle(id, 'magic')],
+        ['戰技', shown(arts), () => this.skillToggle(id, 'arts')],
+        ['技能・迴響技能', shown([...sk.own, ...sk.echo]), () => this.skillToggle(id, 'skill')],
+        ['學習中的魔法・熟練度', '', () => this.magicMenu(id)],
+        ['使用道具', '', () => this.itemMenu()],
+        [inParty ? '移到待命' : '加入隊伍', inParty ? `第 ${S.party.indexOf(id) + 1} 位` : '待命', async () => {
+          if (inParty) { if (S.party.length <= 1) { this.toast('隊伍至少要有一個人'); return; } S.party = S.party.filter(x => x !== id); S.reserve.unshift(id); }
+          else { if (S.party.length >= 4) { this.toast('隊伍已滿（4人），先讓一個人待命'); return; } S.reserve = S.reserve.filter(x => x !== id); S.party.push(id); }
+          this.G.field?.setLeader?.(S.party[0]); this.G.audio.sfx('item');
+        }],
+        ['設為隊長', S.party[0] === id ? '目前隊長' : '', async () => { if (!inParty) { this.toast('先加入隊伍'); return; } S.party = [id, ...S.party.filter(x => x !== id)]; this.G.field?.setLeader?.(id); this.G.audio.sfx('item'); }],
+      ];
+      const i = await this.choose(rows.map(([l, s]) => ({ label: l, sub: s })), { title: `狀態　${HEROES[id].name}　<small>◀ ▶ 換人</small>`, info: () => this.fullStatusHTML(id), start, cls: 'statushub', lr: (k, d) => { id = all[(all.indexOf(id) + d + all.length) % all.length]; start = k; return 'close'; } });
+      if (i === -2) continue;
+      if (i < 0) return;
+      start = i;
+      try { await rows[i][2](); } catch (err) { console.error(err); this.toast('這個畫面發生錯誤'); }
+    }
+  }
+  // pick this hero's echo crystal from the ones owned, take it off, or raise its stars
+  async echoFor(id) {
+    const S = this.S;
+    for (;;) {
+      const h = S.heroes[id], list = ownedEchoes(S);
+      const rows = [{ label: '（卸下迴響）', sub: '' }, ...list.map(e => { const who = Object.keys(S.heroes).find(x => S.heroes[x].echo === e); return { label: (h.echo === e ? '◆ ' : '') + ECHOES[e].short, sub: '★'.repeat(S.echoes[e].star) + ' 羈' + S.echoes[e].bond + (who && who !== id ? '　' + HEROES[who].name : ''), icon: portrait(ECHOES[e].look) }; })];
+      const i = await this.choose(rows, { title: `${HEROES[id].name} 的迴響水晶　碎片 ×${S.items.shard || 0}`, info: (k) => k === 0 ? (h.echo ? this.echoHTML(h.echo) : '<p>沒有裝備迴響。</p>') : this.echoHTML(list[k - 1]), start: h.echo ? list.indexOf(h.echo) + 1 : 0 });
+      if (i < 0) return;
+      if (i === 0) { if (h.echo) { setEcho(S, id, null); this.toast('卸下了迴響'); } continue; }
+      const eid = list[i - 1], e = S.echoes[eid], cost = STAR_COST[e.star + 1];
+      const a = await this.choose([{ label: h.echo === eid ? '已裝備' : '裝備', disabled: h.echo === eid }, { label: e.star >= 3 ? '星級已滿' : `星級提升（碎片 ${cost}）`, disabled: e.star >= 3 || (S.items.shard || 0) < cost }], { title: ECHOES[eid].name, info: this.echoHTML(eid), cls: 'small' });
+      if (a === 0) { setEcho(S, id, eid); this.G.audio.sfx('item'); this.toast(`${HEROES[id].name} 裝備了 ${ECHOES[eid].short}`); }
+      if (a === 1 && starUp(S, eid)) { this.G.audio.sfx('levelup'); this.toast(`${ECHOES[eid].short} 提升到 ${'★'.repeat(S.echoes[eid].star)}！`); }
+    }
+  }
+  // choose which magic, arts and skills show up in battle (hidden ones are also skipped by auto-battle)
+  async skillToggle(id, kind) {
+    const S = this.S; let start = 0;
+    for (;;) {
+      const h = S.heroes[id]; h.hide = h.hide || [];
+      const sk = skillsOf(S, id);
+      let list = kind === 'magic' ? spellsOf(S, id) : kind === 'arts' ? artsOf(S, id) : [...sk.own, ...sk.echo];
+      if (kind === 'magic') list = list.sort((a, b) => Object.keys(SCHOOL_N).indexOf(SKILLS[a].school) - Object.keys(SCHOOL_N).indexOf(SKILLS[b].school) || SKILLS[a].tier - SKILLS[b].tier);
+      const name = { magic: '魔法', arts: '戰技', skill: '技能' }[kind];
+      if (!list.length) { await this.info(kind === 'arts' ? '<p>現在拿的武器還沒有學會戰技。</p><p>用同一種武器戰鬥會提升熟練度，每升一級學會一招。</p>' : kind === 'magic' ? '<p>還沒有魔法。</p><p>裝備帶 ✦ 的裝備、在戰鬥中累積 AP，或到魔法店學習。</p>' : '<p>還沒有技能。</p>', name); return; }
+      const rows = [...list.map(s => { const D = SKILLS[s]; const off = h.hide.includes(s); return { label: (off ? '◇ ' : '◆ ') + D.name + (kind === 'magic' && !h.spells?.includes(s) ? ' ✦' : ''), sub: (kind === 'magic' ? SCHOOL_N[D.school] + '　' : '') + (D.mp ? 'MP ' + D.mp : ''), desc: D.desc + (off ? '　（隱藏中）' : '') + (kind === 'magic' && !h.spells?.includes(s) ? '　✦ 來自裝備，卸下就不能用' : '') }; }), { label: '全部顯示' }, { label: '全部隱藏' }];
+      const i = await this.choose(rows, { title: `${HEROES[id].name} 的${name}　◆ 顯示　◇ 隱藏`, cls: 'items', start, info: (k) => k < list.length ? `<div class="gi"><h4>${SKILLS[list[k]].name}</h4><div>${SKILLS[list[k]].desc}</div>${SKILLS[list[k]].mp ? `<div>MP ${SKILLS[list[k]].mp}</div>` : ''}<p class="dim">按確定切換「顯示／隱藏」。隱藏的招式不會出現在戰鬥選單，自動戰鬥和自動練功也不會使用。</p></div>` : '<p>一次切換這個分類的全部招式。</p>' });
+      if (i < 0) return;
+      start = i;
+      if (i === list.length) h.hide = h.hide.filter(s => !list.includes(s));
+      else if (i === list.length + 1) h.hide = [...new Set([...h.hide, ...list])];
+      else { const s = list[i]; h.hide = h.hide.includes(s) ? h.hide.filter(x => x !== s) : [...h.hide, s]; }
+      this.G.audio.sfx('move');
+    }
+  }
 
   echoHTML(eid) {
     const S = this.S, E = ECHOES[eid], e = S.echoes[eid];
@@ -194,8 +290,8 @@ export class UI {
       if (a === 1) { if (starUp(S, eid)) { this.G.audio.sfx('levelup'); this.toast(`${ECHOES[eid].short} 提升到 ${'★'.repeat(S.echoes[eid].star)}！`); } }
     }
   }
-  async passiveMenu() {
-    const S = this.S; const id = await this.heroPick('能力配置', true); if (!id) return;
+  async passiveMenu(pre) {
+    const S = this.S; const id = pre || await this.heroPick('能力配置', true); if (!id) return;
     for (;;) {
       const h = S.heroes[id]; const L = h.learned;
       if (!L.length) { await this.info('<p>還沒有學會任何被動能力。</p><p>裝備迴響並在戰鬥中提升羈絆，就能學會。學會的能力換了迴響也能繼續裝備。</p>', HEROES[id].name); return; }
@@ -233,8 +329,8 @@ export class UI {
     if (other && G && (G.hands === 2 || GEAR[old[other]]?.hands === 2)) h.equip[other] = null;
     const st = heroStats(S, id); h.equip = old; return st;
   }
-  async equipMenu() {
-    const S = this.S; let id = await this.heroPick('裝備', true); if (!id) return;
+  async equipMenu(pre) {
+    const S = this.S; let id = pre || await this.heroPick('裝備', true); if (!id) return;
     let start = 0;
     for (;;) {
       const h = S.heroes[id];
@@ -280,8 +376,8 @@ export class UI {
     return `<div class="pd-row"><figure><img src="${now}"><figcaption>現在</figcaption></figure><span>▶</span><figure><img src="${next}"><figcaption>試穿</figcaption></figure></div><div class="cmp">${['hp', 'mp', 'atk', 'def', 'mag', 'spr', 'spd'].map(k => { const d = after[k] - before[k]; return `<div><span>${({ hp: 'HP', mp: 'MP', atk: '攻擊', def: '防禦', mag: '魔力', spr: '精神', spd: '速度' })[k]}</span><b>${before[k]}</b>→<b class="${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${after[k]}</b></div>`; }).join('')}</div>`;
   }
   compare(id, slot, g) { return this.compareWith(id, slot, g); }
-  async magicMenu() {
-    const S = this.S; let id = await this.heroPick('魔法・戰技', true); if (!id) return;
+  async magicMenu(pre) {
+    const S = this.S; let id = pre || await this.heroPick('魔法・戰技', true); if (!id) return;
     for (;;) {
       const h = S.heroes[id];
       const i = await this.choose([{ label: '魔法一覽', sub: spellsOf(S, id).length + '' }, { label: '學習中的魔法', sub: Object.keys(h.ap || {}).length + '' }, { label: '武器熟練度', sub: '' }], { title: HEROES[id].name + '　魔法・戰技', info: '<p>魔法可以從三個地方學會：</p><p>✦ 裝備上帶有魔法的武器或防具，戰鬥勝利會得到 AP，存滿就永久學會。</p><p>✦ 城鎮的魔法店花錢學習。</p><p>✦ 裝備的期間就能先用。</p><p>戰技：用某種武器戰鬥會提升熟練度，學會那種武器的戰技。</p>' });
@@ -325,7 +421,7 @@ export class UI {
     const S = this.S, I = ITEMS[id];
     if (!I || !I.use || I.use.dmg || I.use.escape || I.use.status && !I.use.self || I.use.analyze || I.use.cast || I.use.buff || I.use.evadeT) { if (I?.use) this.toast('戰鬥中才能使用'); return; }
     const spend = () => { S.items[id]--; if (!S.items[id]) delete S.items[id]; this.hud(); };
-    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js?v=13'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
+    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js?v=14'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
     if (I.use.meal) { S.meal = { fx: I.use.meal, n: 5, name: I.name }; spend(); this.G.audio.sfx('heal'); this.toast(`吃了${I.name}！之後5場戰鬥都有效果`); return; }
     if (I.use.repel) { S.repel = I.use.repel; S.lure = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人不會靠近了'); return; }
     if (I.use.lure) { S.lure = I.use.lure; S.repel = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人更容易出現了'); return; }
@@ -562,7 +658,7 @@ export class UI {
     if (S.gil < price) { await this.say('旅店老闆', '哎呀，錢好像不夠呢……', 'innkeep'); return false; }
     S.gil -= price;
     this.G.audio.music(null); await this.fade(1, 700);
-    const { healAll } = await import('./party.js?v=13'); healAll(S);
+    const { healAll } = await import('./party.js?v=14'); healAll(S);
     this.G.audio.sfx('save'); await wait(1200);
     await this.fade(0, 700); this.G.audio.music(this.G.field.def.bgm || this.G.field.theme.bgm);
     await this.say('旅店老闆', '早安！昨晚睡得好嗎？路上小心喔。', 'innkeep');

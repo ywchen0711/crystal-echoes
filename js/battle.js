@@ -1,15 +1,17 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=13';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=13';
-import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=13';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=13';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=13';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=13';
-import { lookOf } from './field.js?v=13';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=13';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=14';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=14';
+import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=14';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=14';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=14';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=14';
+import { lookOf } from './field.js?v=14';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=14';
 
 const ENEMY_DMG = 1.55;
+const EL_OPP = { fire: 'ice', ice: 'fire', thunder: 'water', water: 'thunder', wind: 'earth', earth: 'wind', light: 'dark', dark: 'light' };
+const EL_RING = ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'];
 const BG = {
   field: { tile: ['grass', '#62a046'], side: ['grass', '#4e8a3c'], sky: ['#5a96e8', '#f0e8d0'], props: [['tree', {}], ['tree', { leaf: '#5a9a3a' }], ['bush', {}], ['rock', {}]], light: 'day', fog: '#d8e4f0' },
   forest: { tile: ['grass', '#4a8038'], side: ['dirt', '#6a5a40'], sky: ['#3a6a5a', '#a8c8a0'], props: [['tree', { leaf: '#3a7a3a' }], ['pine', { leaf: '#2e6a4a' }], ['bush', { leaf: '#3a7a34' }], ['tree', { leaf: '#2e6a2e' }]], light: 'forest', fog: '#5a7a5a' },
@@ -78,7 +80,7 @@ export class Battle {
   }
 
   makeUnits(troop, opts) {
-    this.units = [];
+    this.units = []; this._awed = false; this.splits = 0;
     const P = this.S.party;
     const slots = [[2.9, -1.9], [3.9, -0.65], [4.9, 0.6], [5.9, 1.85]];
     P.forEach((id, i) => {
@@ -127,9 +129,13 @@ export class Battle {
     const u = { side: 'enemy', fam: E.fam, traits: new Set(E.traits || []), barrier: {}, id: eid, E, name: E.name + suffix, lv: E.lv, st, hp: st.hp, mp: 999, shield: E.shield, maxShield: E.shield, weak: E.weak, resist: E.resist || [], revealed: new Set(this.S.flags['seen_' + eid] || []), buffs: {}, status: {}, spr, alive: true, broken: false, brokenUntil: -1, boss: !!E.boss, home: pos };
     if (u.traits.has('reflect')) u.status.reflect = 99;
     if (u.traits.has('stealth')) u.status.hidden = 99;
+    if (u.traits.has('phase')) u.phase = Math.random() < 0.5 ? 'phys' : 'mag';
+    if (u.traits.has('countdown')) u.count = 4;
+    if (u.traits.has('shift')) u.curEl = E.el || 'fire';
     u.aura = E.aura; u.absorb = E.absorb || [];
     this.addSprite(u, pos[0], pos[1]);
     this.units.push(u);
+    if (u.traits.has('intimidate') && !this._awed) { this._awed = true; for (const a of this.party) if (a.alive) this.buff(a, { atk: -1 }, true); this.pop(u, '威壓！全隊攻擊↓', '#ff8a8a', true); }
     return u;
   }
   // a summoner calls a weaker member of its family onto a free spot
@@ -146,6 +152,26 @@ export class Battle {
     this.ui.addEnemy(m); this.ui.refresh();
     await wait(500);
   }
+  // a splitter tears in two: the copy takes half of what is left
+  async splitOff(t) {
+    const spots = [[-2.2, -2.0], [-5.0, -1.3], [-2.6, 0.9], [-5.4, 1.9], [-3.8, 0]];
+    const free = spots.find(p => !this.foes.some(f => Math.hypot(f.home[0] - p[0], f.home[1] - p[1]) < 1.2));
+    if (!free || this.foes.length >= 4) return;
+    this.splits = (this.splits || 0) + 1;
+    const half = Math.ceil(t.hp / 2); t.hp -= half;
+    const m = this.makeEnemy(t.id, free, '′'); m.hp = half; m.split = true;
+    this.pop(t, '分裂！', '#8affb0', true);
+    this.fx.emit({ x: m.x, y: 0.8, z: m.z, n: 24, color: '#8affb0', speed: 2.5, life: 0.6, size: 0.22 });
+    this.ui.addEnemy(m); this.ui.refresh();
+    await wait(350);
+  }
+  async doomsday(u) {
+    await this.ui.banner('末日', u.name, '#ff4a3a');
+    this.camShake = 0.5; this.flash('#ff4a3a', 0.4); this.G.audio.sfx('break');
+    for (const a of this.allies) if (!a.jumping) this.damage(a, Math.max(1, Math.round(a.st.hp * 0.45 * (a.defending ? 0.5 : 1))), {});
+    await wait(500); this.checkDeaths();
+  }
+  async enemyFlee(u, why) { this.pop(u, why, '#fff'); u.alive = false; u.fled = true; this.fadeOut(u); this.queue = (this.queue || []).filter(q => q !== u); this.ui.refresh(); this.ui.timeline(); await wait(450); }
   hasKey(k) { return this.allies.some(a => a.key === k); }
   debuffCount(t) { return Object.keys(t.status).filter(k => !['regen', 'haste', 'reflect', 'reraise', 'hidden', 'enraged'].includes(k)).length + Object.values(t.buffs).filter(b => b.v < 0).length; }
   addSprite(u, x, z) {
@@ -276,6 +302,8 @@ export class Battle {
       if (u.status.burn) { const amp = (u.burnBy?.key === 'inferno' ? 2 : 1) * (u.burnBy?.fx?.burnAmp ? 2 : 1); this.damage(u, Math.max(1, Math.round(u.st.hp * (u.boss ? 0.015 : 0.04) * amp)), { color: '#ff8a3a' }); }
       if (u.traits.has('regen') && !u.status.burn && !u.status.poison && !u.noRegen && u.hp > 0 && u.hp < u.st.hp) this.heal(u, Math.round(u.st.hp * (u.boss ? 0.03 : 0.08)));
       if (u.noRegen) u.noRegen--;
+      if (u.traits.has('phase')) { u.phase = u.phase === 'phys' ? 'mag' : 'phys'; this.pop(u, u.phase === 'phys' ? '物理無效形態' : '魔法無效形態', '#c8a0ff'); }
+      if (u.traits.has('shift')) { u.curEl = EL_RING[(EL_RING.indexOf(u.curEl) + 3) % 8]; u.weak = [...new Set([EL_OPP[u.curEl], ...u.E.weak.filter(w => !ELEM[w])])]; u.resist = [u.curEl]; if (u.absorb?.length) u.absorb = [u.curEl]; this.pop(u, `變成${ELEM[u.curEl]}屬性`, '#ffe04a'); }
       for (const k of ['wet', 'burn', 'chill', 'mud', 'erosion']) if (u.status[k]) { u.status[k]--; if (!u.status[k]) delete u.status[k]; }
     }
     for (const a of this.allies) a.shadowUsed = false;
@@ -322,7 +350,7 @@ export class Battle {
   }
   autoAction(u) {
     const foes = this.foes; const low = this.allies.find(a => a.hp < a.st.hp * 0.35);
-    const sk = skillsOf(this.S, u.hero), all = [...sk.own, ...sk.echo, ...artsOf(this.S, u.hero), ...spellsOf(this.S, u.hero)];
+    const sk = skillsOf(this.S, u.hero), hid = new Set(this.S.heroes[u.hero]?.hide || []), all = [...sk.own, ...sk.echo, ...artsOf(this.S, u.hero), ...spellsOf(this.S, u.hero)].filter(s => !hid.has(s));
     const can = (s) => { const D = SKILLS[s]; return D && u.mp >= this.mpCost(u, D) && !(u.status.silence && (D.spell || ['mag', 'heal', 'debuff'].includes(D.type)) && !D.art); };
     const dead = this.party.find(p => !p.alive);
     if (dead) { const rv = all.find(s => SKILLS[s].tgt === 'dead' && can(s)); if (rv) return { kind: 'skill', skill: rv, targets: [dead] }; }
@@ -596,6 +624,10 @@ export class Battle {
       const g = this.allies.find(a => a !== tgt && !a.jumping && (a.stance === 'cover' || (a.fx?.cover && tgt.hp < tgt.st.hp * 0.3 && a.hp > a.st.hp * 0.5)));
       if (g) { this.pop(g, '掩護！', '#8ac8ff'); tgt = g; }
     }
+    if (tgt.side === 'enemy' && u.side !== 'enemy' && S.tgt === 'enemy' && !ctx.counter && !ctx.chained && !tgt.traits?.has('guardian')) {
+      const g = this.foes.find(f => f !== tgt && f.traits.has('guardian') && !f.broken && !f.status.stun && !f.status.sleep && !f.status.stop && !f.status.frozen);
+      if (g && Math.random() < 0.75) { this.pop(g, '守衛！', '#8ac8ff'); tgt = g; }
+    }
     if (S.type === 'mag' && tgt.status.reflect && (S.tgt === 'enemy' || S.tgt === 'ally') && !ctx.reflected) {
       this.pop(tgt, '反射', '#c8e8ff'); const pool = (u.side === 'enemy' ? this.foes : this.allies).filter(x => x.alive && !x.jumping);
       if (pool.length) { tgt = pool[Math.random() * pool.length | 0]; ctx = { ...ctx, reflected: true }; }
@@ -652,6 +684,17 @@ export class Battle {
     // thorny monsters bite back at whoever hits them up close
     if (tgt.side === 'enemy' && tgt.traits?.has('thorns') && u.side === 'party' && S.type === 'phys' && !S.ranged && !ctx.counter && u.hp > 1 && (WTYPES[hand?.type || S.art || S.wpn]?.melee ?? true) && !(u.key === 'flurry' && (hand?.type === 'knuckle' || S.art === 'knuckle'))) this.damage(u, Math.min(u.hp - 1, Math.max(1, Math.round(r.dmg * 0.2))), { color: '#8aff6a' });
     if (u.side === 'enemy' && u.traits?.has('curse') && S.type === 'phys' && tgt.alive) this.inflict(tgt, 'curse', 0.35, true);
+    if (tgt.side === 'enemy' && u.side !== 'enemy' && tgt.alive && tgt.hp > 0) {
+      const tr = tgt.traits;
+      if (tr.has('harden') && (tgt.hard || 0) < 6) { tgt.hard = (tgt.hard || 0) + 1; this.pop(tgt, '硬化', '#c8c8d8'); }
+      if (tr.has('adapt') && el0 && tgt.adaptEl !== el0) { tgt.adaptEl = el0; this.pop(tgt, `適應了${ELEM[el0]}`, '#8affb0'); }
+      if (tr.has('counter') && u.side === 'party' && S.type === 'phys' && !ctx.counter && !S.ranged && (WTYPES[hand?.type || S.art || S.wpn]?.melee ?? true) && !tgt.broken && !tgt.status.stun && !tgt.status.sleep && !tgt.status.stop && !tgt.status.frozen && u.alive && Math.random() < 0.4) this.counterQ = [tgt, u];
+      if (tr.has('split') && S.type === 'phys' && !tags.some(x => x === 'fire' || x === 'ice') && tgt.hp > tgt.st.hp * 0.3 && (this.splits || 0) < 3 && Math.random() < 0.35) await this.splitOff(tgt);
+    }
+    if (u.side === 'enemy' && u.alive && tgt.side === 'party' && S.type === 'phys') {
+      if (u.traits.has('leech') && !u.status.poison && !u.status.burn) this.heal(u, Math.round(r.dmg * 0.5));
+      if (u.traits.has('mpburn') && tgt.mp > 0) { const m = Math.max(1, Math.round(tgt.st.mp * 0.12)); tgt.mp = Math.max(0, tgt.mp - m); this.pop(tgt, `MP -${m}`, '#8ac8ff'); }
+    }
     // chain lightning
     if (u.side === 'party' && tags.includes('thunder') && !ctx.chained && (u.key === 'chain' || u.fx?.chainT)) {
       const pool = this.foes.filter(f => f !== tgt); let n = 1 + (rx?.wasWet ? 1 : 0) + (this.pairs?.has('storm') ? 1 : 0);
@@ -778,10 +821,14 @@ export class Battle {
     if (t.side === 'enemy') {
       if (phys && t.traits?.has('ghost') && !tags.some(x => ELEM[x]) && !t.noResist) dmg *= 0.3;
       if (!phys && S.type === 'mag' && !S.art && t.traits?.has('mimmune') && !t.noResist) dmg *= 0.35;
+      if (t.phase === 'phys' && phys) dmg *= 0.15;
+      if (t.phase === 'mag' && !phys && S.type === 'mag' && !S.art) dmg *= 0.15;
+      if (t.hard) dmg *= 1 - 0.08 * t.hard;
+      if (t.adaptEl && tags.includes(t.adaptEl) && !t.noResist) dmg *= 0.35;
       if (this.foes.some(f => f !== t && f.aura === 'guard')) dmg *= 0.7;
       if (t.status.wet) dmg *= 1 + (this.hasKey('tide') ? 0.15 : 0) + Math.max(0, ...this.allies.map(a => a.fx?.wetAmp || 0));
     }
-    if (u.side === 'enemy') { if (this.foes.some(f => f !== u && f.aura === 'might')) dmg *= 1.3; if (u.enraged) dmg *= 1.4; }
+    if (u.side === 'enemy') { if (this.foes.some(f => f !== u && f.aura === 'might')) dmg *= 1.3; if (u.enraged) dmg *= 1.4; if (t.hunted && this.foes.some(f => f.traits?.has('hunter'))) dmg *= 1.3; }
     if (u.side === 'party') {
       if (u.fx?.elUp) for (const x of tags) if (u.fx.elUp[x]) dmg *= 1 + u.fx.elUp[x];
       if (['undead', 'demon'].includes(t.fam)) dmg *= (u.key === 'purge' ? 1.5 : 1) * (u.on?.includes('p_antiundead') ? 1.3 : 1);
@@ -831,6 +878,7 @@ export class Battle {
     if (t.immune || t.immuneSet?.has(st) || t.E?.metal) { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; }
     if (t.boss) { if (st === 'doom') { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; } if (['sleep', 'stop', 'confuse', 'stun'].includes(st)) chance *= 0.25; }
     if (Math.random() > chance) return;
+    if (t.charging && ['stun', 'stop', 'sleep'].includes(st)) { t.charging = false; this.pop(t, '蓄力被打斷！', '#8ae0ff'); }
     t.status[st] = ({ stop: 2, stun: 1, doom: 3, confuse: 2 }[st] || 3) * (['slow', 'stop'].includes(st) && this.curActor?.key === 'gears' ? 2 : 1);
     this.pop(t, STATUS_N[st], '#c86aff');
     if (st === 'stop' || st === 'stun') this.ui.timeline();
@@ -853,7 +901,7 @@ export class Battle {
     this.ui.refresh();
     if (t.shield === 0) {
       if (this.curActor?.key === 'fortune') this.curActor.limit = Math.min(100, (this.curActor.limit || 0) + 25);
-      t.broken = true; t.brokenUntil = this.round + 1;
+      t.broken = true; t.brokenUntil = this.round + 1; if (t.charging) { t.charging = false; this.pop(t, '蓄力被打斷！', '#8ae0ff'); }
       this.G.audio.sfx('break');
       this.pop(t, 'BREAK!', '#ffe04a', true);
       this.fx.emit({ x: t.x, y: 1.2, z: t.z, n: 60, color: '#ffe04a', speed: 5, life: 0.8, size: 0.3, gravity: 3 });
@@ -901,6 +949,10 @@ export class Battle {
       this.recheck = true;
     }
     if (u.traits.has('swarm')) for (const f of this.foes) if (f.E?.kind === u.E?.kind) this.buff(f, { atk: 1 }, true);
+    if (u.traits.has('martyr') && !u.broken) { const rest = this.foes.filter(f => f !== u); if (rest.length) { this.pop(u, '殉道！', '#fff4b0', true); for (const f of rest) { this.heal(f, Math.round(f.st.hp * 0.35)); this.buff(f, { def: 1, spr: 1 }, true); } } }
+    if (u.stoleItem) { addItem(this.S, u.stoleItem, 1); this.pop(u, `拿回了 ${itemName(u.stoleItem)}`, '#ffe04a'); u.stoleItem = null; }
+    if (u.stoleGil) { this.S.gil += u.stoleGil; this.pop(u, `拿回了 ${u.stoleGil}G`, '#ffe04a'); u.stoleGil = 0; }
+    if (u.traits.has('hunter')) for (const a of this.party) a.hunted = false;
     if (this.hasKey('harvest')) for (const a of this.allies) a.mp = Math.min(a.st.mp, a.mp + Math.round(a.st.mp * 0.08));
     if (k?.side === 'party') {
       if (k.on?.includes('p_soulharvest')) k.mp = Math.min(k.st.mp, k.mp + Math.round(k.st.mp * 0.15));
@@ -917,6 +969,31 @@ export class Battle {
 
   // ---------------------------------------------------------------- enemies
   async enemyTurn(u, second) {
+    if (!second) {
+      const tr = u.traits; u.turnN = (u.turnN || 0) + 1;
+      if (tr.has('countdown')) { u.count--; if (u.count <= 0) { u.count = 4; await this.doomsday(u); return; } this.pop(u, `倒數 ${u.count}`, '#ffb04a'); }
+      if (tr.has('charge')) {
+        if (u.charging) { u.charging = false; this.msg('蓄力爆擊！'); await this.useSkill(u, 'e_chargeblast', this.allies.filter(a => !a.jumping), {}); return; }
+        if (u.turnN % 3 === 0) { u.charging = true; this.pop(u, '蓄力中……', '#ffe04a', true); this.msg(`${u.name} 正在蓄力！破防或暈眩可以打斷`); await wait(600); this.ui.refresh(); return; }
+      }
+      if (tr.has('flee') && u.turnN >= 3) return this.enemyFlee(u, '逃走了');
+      if (tr.has('thief')) {
+        if (u.stoleItem || u.stoleGil) return this.enemyFlee(u, '帶著東西逃走了');
+        const pool = this.allies.filter(a => !a.jumping);
+        if (pool.length && Math.random() < 0.65) {
+          const tgt = pool[Math.random() * pool.length | 0];
+          await this.useSkill(u, 'e_snatch', [tgt], {});
+          if (u.alive) {
+            const own = Object.keys(this.S.items).filter(i => this.S.items[i] > 0 && ITEMS[i]?.use && !String(i).startsWith('k_'));
+            if (own.length) { const it = own[Math.random() * own.length | 0]; this.S.items[it]--; if (!this.S.items[it]) delete this.S.items[it]; u.stoleItem = it; this.pop(tgt, `被偷走 ${itemName(it)}！`, '#ffb04a', true); }
+            else { const g = Math.min(this.S.gil, 30 + u.lv * 8); this.S.gil -= g; u.stoleGil = g; this.pop(tgt, `被偷走 ${g}G！`, '#ffb04a', true); }
+            this.msg(`${u.name} 下回合就會逃走！`);
+          }
+          return;
+        }
+      }
+      if (tr.has('hunter') && (!u.prey || !u.prey.alive)) { const pool = this.allies.filter(a => !a.jumping); if (pool.length) { for (const a of this.party) a.hunted = false; u.prey = pool[Math.random() * pool.length | 0]; u.prey.hunted = true; this.pop(u.prey, '被鎖定了！', '#ff4a3a', true); await wait(300); } }
+    }
     const acts = u.E.acts; let total = acts.reduce((s, a) => s + a[1], 0), r = Math.random() * total, pick = acts[0][0];
     for (const [s, w] of acts) { r -= w; if (r <= 0) { pick = s; break; } }
     let S = SKILLS[pick];
@@ -925,7 +1002,9 @@ export class Battle {
     let targets;
     const pool = this.allies.filter(a => !a.jumping);
     if (!pool.length) return;
-    if (S.tgt === 'enemy') { const taunt = pool.filter(a => a.taunt); targets = [taunt.length && (taunt[0].key === 'aegisheart' || Math.random() < 0.8) ? taunt[0] : pool[Math.random() * pool.length | 0]]; }
+    const prey = this.foes.find(f => f.traits?.has('hunter') && f.prey?.alive && !f.prey.jumping)?.prey;
+    if (S.tgt === 'enemy' && prey && !pool.some(a => a.taunt)) targets = [prey];
+    else if (S.tgt === 'enemy') { const taunt = pool.filter(a => a.taunt); targets = [taunt.length && (taunt[0].key === 'aegisheart' || Math.random() < 0.8) ? taunt[0] : pool[Math.random() * pool.length | 0]]; }
     else if (S.tgt === 'enemies' || S.tgt === 'random') targets = pool;
     else if (S.tgt === 'allyE') { const low = this.foes.sort((a, b) => a.hp / a.st.hp - b.hp / b.st.hp)[0]; targets = [low]; S = { ...S, tgt: 'ally' }; }
     else targets = [u];
@@ -1164,7 +1243,7 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=13');
+    const { gainExp, gainBond } = await import('./party.js?v=14');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);
@@ -1243,7 +1322,7 @@ class BattleUI {
       d.style.display = u.alive ? '' : 'none';
       d.querySelector('.b-ebar i').style.width = (u.hp / u.st.hp * 100) + '%';
       const sh = d.querySelector('.b-shield'); sh.classList.toggle('broken', u.broken); sh.querySelector('b').textContent = u.broken ? 'BREAK' : u.shield;
-      d.querySelector('.b-est').textContent = Object.keys(u.status).map(k => STATUS_S[k] || '').join('') + (u.noArmor && u.traits.has('armor') ? '破' : '') + (u.grounded ? '墜' : '') + (u.mark ? '印' : '');
+      d.querySelector('.b-est').textContent = (u.phase === 'phys' ? '🛡' : u.phase === 'mag' ? '🔮' : '') + (u.charging ? '⚡' : '') + (u.count != null ? '⏳' + u.count : '') + (u.hard ? '殼' + u.hard : '') + (u.curEl ? ICON[u.curEl] || '' : '') + (u.stoleItem || u.stoleGil ? '💰' : '') + Object.keys(u.status).map(k => STATUS_S[k] || '').join('') + (u.noArmor && u.traits.has('armor') ? '破' : '') + (u.grounded ? '墜' : '') + (u.mark ? '印' : '');
       d.querySelector('.b-etr').style.opacity = (u.noArmor && u.traits.has('armor')) || (u.grounded && u.traits.has('fly')) ? 0.35 : 1;
       const allWeak = [...u.weak, ...Object.keys(u.extraWeak || {}).filter(w => !u.weak.includes(w))];
       const tags = u.E.hideWeak ? allWeak.filter(w => u.revealed.has(w)).slice(0, 10) : allWeak;
@@ -1297,7 +1376,7 @@ class BattleUI {
   // ---------------------------------------------------------------- commands
   async command(u, extra) {
     const b = this.b, S = b.S;
-    const sk = skillsOf(S, u.hero), arts = artsOf(S, u.hero), spells = spellsOf(S, u.hero);
+    const hid = new Set(S.heroes[u.hero]?.hide || []), vis = (l) => l.filter(s => !hid.has(s)), sk0 = skillsOf(S, u.hero), sk = { own: vis(sk0.own), echo: vis(sk0.echo) }, arts = vis(artsOf(S, u.hero)), spells = vis(spellsOf(S, u.hero));
     const items = Object.keys(S.items).filter(i => ITEMS[i] && ITEMS[i].tgt && ITEMS[i].use && !ITEMS[i].use.grow);
     const opts = [
       { k: 'attack', label: '攻擊', sub: u.hands.map(h => ICON[h.type] || '👊').join('') },

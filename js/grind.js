@@ -1,7 +1,7 @@
 // Auto-grinding: the hero wanders around where you started, fights on auto, patches up between fights,
 // and stops on your conditions with a summary of what was earned.
-import { HEROES, ITEMS } from './data.js?v=13';
-import { heroStats, itemName } from './party.js?v=13';
+import { HEROES, ITEMS } from './data.js?v=14';
+import { heroStats, itemName } from './party.js?v=14';
 
 export const GRIND_DEFAULT = { hp: 0.35, battles: 0, lvUp: 0, heal: true, ether: true, speed: 2 };
 export const GRIND_OPTS = {

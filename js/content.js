@@ -1,8 +1,9 @@
 // Generated content: weapon types with their own battle rules, 1000+ pieces of equipment with effects,
 // 400 spells, 500 items and the weapon arts. Everything is built from tables so it stays consistent.
-import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=13';
-import { BESTIARY_NEW } from './monsters.js?v=13';
-import { applyDepth } from './depth.js?v=13';
+import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=14';
+import { BESTIARY_NEW } from './monsters.js?v=14';
+import { H_TRAITS } from './horde.js?v=14';
+import { applyDepth } from './depth.js?v=14';
 export { BESTIARY_NEW };
 
 export const ELS = ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'];
@@ -503,6 +504,7 @@ function buildDrops(id, E) {
   const generic = new Set(['potion', 'antidote', 'ether', 'hipotion', 'hiether', 'xpotion', 'bombfrag']);
   const special = (E.drops || []).filter(d => !generic.has(d[0]) && !String(d[0]).startsWith('i_'));
   const gen = (E.drops || []).filter(d => generic.has(d[0]));
+  if (E.sig) { slots[1] = [E.sig.item, 0.35]; slots[3] = [E.sig.gear, E.sig.gearP]; } // the horde's own drops
   if (gen[0]) slots[1] = gen[0];
   special.forEach((d, i) => { const at = [1, 2, 0, 3][i] ?? 3; slots[at] = d; });
   return slots;
@@ -520,6 +522,7 @@ function processEnemies() {
 }
 processEnemies();
 applyDepth({ GEAR_BY_TIER, TRAIT_N, STATUS_N, STATUS_S, put });
+Object.assign(TRAIT_N, H_TRAITS);
 export const ENEMY_COUNT = Object.keys(ENEMIES).length;
 
 // describe an equipment piece's effects in plain words

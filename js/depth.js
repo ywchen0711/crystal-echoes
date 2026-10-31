@@ -1,6 +1,6 @@
 // Strategic depth: 24 echoes with keystones, echo pairs, elemental states and reactions,
 // monster traits that each demand a different answer, and gear sets worth hunting for.
-import { ECHOES, SKILLS, PASSIVES, ECHO_ORDER, ENEMIES, GEAR, ELEM } from './data.js?v=13';
+import { ECHOES, SKILLS, PASSIVES, ECHO_ORDER, ENEMIES, GEAR, ELEM } from './data.js?v=14';
 
 // ================================================================ elemental states and reactions
 // a hit leaves its element on the target; the next element can react with it
@@ -422,7 +422,7 @@ export function applyDepth({ GEAR_BY_TIER, TRAIT_N, STATUS_N, STATUS_S, put }) {
   }
   // set pieces drop from the families that guard them, in their tier band
   for (const [id, E] of Object.entries(ENEMIES)) {
-    if (!E.drops?.[3] || !String(E.drops[3][0]).startsWith('g_')) continue;
+    if (E.sig || !E.drops?.[3] || !String(E.drops[3][0]).startsWith('g_')) continue;
     const h = hashStr(id);
     for (const [sid, D] of Object.entries(SETS)) {
       if (!D.fams.includes(E.fam) || Math.abs(E.tier - D.tier) > 1 || (!E.boss && h % 3)) continue;

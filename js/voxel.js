@@ -310,7 +310,7 @@ const geoCache = new Map();
 function geometriesFor(look) {
   const key = JSON.stringify(look);
   let G = geoCache.get(key);
-  if (!G) { const P = partsFor(look); G = {}; const AO = { leg: [-LEG, -1, 0.72], torso: [-15, 13, 0.78], head: [-2, 14, 0.82], arm: [-11, 0, 0.8], cape: [-25, 1, 0.7] }; for (const k in P) G[k] = meshGrid(P[k], 0.035, AO[k]); geoCache.set(key, G); }
+  if (!G) { const P = partsFor(look); G = {}; const AO = { leg: [-LEG, -1, 0.72], torso: [-15, 13, 0.78], head: [-2, 14, 0.82], arm: [-11, 0, 0.8], cape: [-25, 1, 0.7] }; for (const k in P) G[k] = meshGrid(P[k], 0.012, AO[k]); geoCache.set(key, G); }
   return G;
 }
 

@@ -263,7 +263,7 @@ export class Field {
     for (const a of ['x', 'y', 'z']) { const d = p[a] - this.cam[a]; this.cam[a] = Math.abs(d) < 0.003 ? p[a] : this.cam[a] + d * k; }
     { const d = this.yaw - this.yawCur; if (Math.abs(d) < 0.001) this.yawCur = this.yaw; }
     const far = this.world ? (this.mount === 'airship' ? 1.5 : 1.15) : this.def.interior ? 0.85 : 1;
-    const dist = (this.world ? 13.5 : 11.5) * far * (this.zoom || 1), pitch = this.world ? 0.82 : 0.68;
+    const dist = (this.world ? 14.5 : 15.5) * far * (this.zoom || 1), pitch = this.world ? 0.9 : 0.86;
     const hd = Math.cos(pitch) * dist, sy = Math.sin(this.yawCur), cy = Math.cos(this.yawCur);
     this.camera.position.set(this.cam.x + sy * hd, this.cam.y + Math.sin(pitch) * dist + 0.8, this.cam.z + cy * hd);
     this.camera.lookAt(this.cam.x - sy * 0.4, this.cam.y + 0.9, this.cam.z - cy * 0.4);

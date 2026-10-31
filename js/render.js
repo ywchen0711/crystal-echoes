@@ -30,7 +30,7 @@ const TiltShift = {
     }`,
 };
 const Grade = {
-  uniforms: { tDiffuse: { value: null }, sat: { value: 1.1 }, contrast: { value: 1.1 }, tint: { value: new THREE.Vector3(1.02, 1.0, 0.97) }, vig: { value: 0.6 }, fade: { value: 0 }, flash: { value: 0 }, flashColor: { value: new THREE.Vector3(1, 1, 1) }, gray: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, sat: { value: 0.98 }, contrast: { value: 1.05 }, tint: { value: new THREE.Vector3(1.02, 1.0, 0.97) }, vig: { value: 0.5 }, fade: { value: 0 }, flash: { value: 0 }, flashColor: { value: new THREE.Vector3(1, 1, 1) }, gray: { value: 0 } },
   vertexShader: TiltShift.vertexShader,
   fragmentShader: `uniform sampler2D tDiffuse; uniform float sat, contrast, vig, fade, flash, gray; uniform vec3 tint, flashColor; varying vec2 vUv;
     void main(){
@@ -165,7 +165,8 @@ export function depthMat(tex) { return new THREE.MeshDepthMaterial({ depthPackin
 export class Sprite {
   constructor(sheetCanvas, frames, opts = {}) {
     this.frames = frames;
-    this.fw = sheetCanvas.width / frames; this.fh = sheetCanvas.height;
+    const k = sheetCanvas.pxScale || 1;
+    this.fw = sheetCanvas.width / frames / k; this.fh = sheetCanvas.height / k;
     this.tex = texFrom(sheetCanvas);
     this.tex.repeat.set(1 / frames, 1);
     this.scale = opts.scale || 1;
@@ -299,12 +300,14 @@ export function waterMaterial(color = '#2a6ab0', deep = '#123a6a') {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWp = (modelMatrix * vec4(transformed,1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTime; uniform vec3 uDeep; varying vec3 vWp;\nfloat hsh(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }')
       .replace('#include <color_fragment>', `#include <color_fragment>
-        vec2 q = floor(vWp.xz * 8.0) / 8.0;
-        float w = sin(q.x * 3.1 + uTime * 1.3) * sin(q.y * 2.3 - uTime * 1.1) + sin((q.x + q.y) * 5.0 + uTime * 2.0) * 0.5;
-        diffuseColor.rgb = mix(uDeep, diffuseColor.rgb, 0.55 + 0.25 * w);
-        float sp = step(0.985, hsh(floor(vWp.xz * 10.0) + floor(uTime * 3.0)));
-        float band = step(0.93, sin(q.x * 2.0 + q.y * 1.3 + uTime * 1.6) * 0.5 + 0.5);
-        diffuseColor.rgb += vec3(0.75, 0.85, 1.0) * (sp * 0.9 + band * 0.18);`);
+        vec2 q = vWp.xz;
+        float w = sin(q.x * 3.1 + uTime * 1.3) * sin(q.y * 2.3 - uTime * 1.1) + sin((q.x + q.y) * 5.0 + uTime * 2.0) * 0.5 + sin(q.x * 9.0 - q.y * 7.0 + uTime * 2.6) * 0.2;
+        diffuseColor.rgb = mix(uDeep, diffuseColor.rgb, 0.58 + 0.2 * w);
+        vec2 cell = floor(q * 3.0), f = fract(q * 3.0) - 0.5;
+        float tw = hsh(cell + floor(uTime * 0.7)); vec2 o = vec2(hsh(cell + 3.1), hsh(cell + 7.7)) - 0.5;
+        float sp = step(0.86, tw) * smoothstep(0.09, 0.0, length(f - o * 0.6)) * (0.5 + 0.5 * sin(uTime * 4.0 + tw * 30.0));
+        float band = smoothstep(0.86, 0.98, sin(q.x * 2.0 + q.y * 1.3 + uTime * 1.6 + w * 0.6) * 0.5 + 0.5);
+        diffuseColor.rgb += vec3(0.75, 0.85, 1.0) * (sp * 0.9 + band * 0.12);`);
     sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(0.6,0.8,1.0) * sp * 0.7;');
   };
   return m;

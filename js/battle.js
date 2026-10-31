@@ -1,7 +1,7 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
 import * as THREE from '../lib/three.module.min.js';
 import { Sprite, Particles, skyDome, blobShadow } from './render.js';
-import { battleSheet, monsterPx, propPx, tileTex, texFrom, BPOSE } from './pixel.js';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js';
 import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js';
 import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js';
 import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP } from './party.js';
@@ -64,7 +64,7 @@ export class Battle {
       const [k, c] = B.props[i % B.props.length];
       const x = -16 + r() * 32, z = -9.5 + r() * 4 + (Math.abs(x) > 9 ? r() * 8 : 0);
       if (Math.abs(x) < 7.5 && z > -5) continue;
-      const px = propPx(k, c); const sp = new Sprite(px.canvas(), 1, { scale: 1.3 + r() * 0.5 });
+      const px = propPx(k, c); const sp = new Sprite(propCanvas(px), 1, { scale: 1.3 + r() * 0.5 });
       sp.mesh.position.set(x, z < -8 ? 1.4 : 0, z); st.add(sp.mesh);
     }
     if (B.pillars) for (const x of [-9, -5, 5, 9]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 5, 10), new THREE.MeshStandardMaterial({ map: tileTex(B.side[0], B.side[1]), roughness: 0.9 })); p.position.set(x, 2.5, -6.5); p.castShadow = true; st.add(p); }

@@ -1,5 +1,6 @@
 // Pixel art made in code: characters, monsters, tiles and props, all drawn on small canvases.
 import * as THREE from '../lib/three.module.min.js';
+import { hdCanvas, hdTexture, hdProp } from './hdtex.js';
 
 let seed = 1234;
 export const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -58,7 +59,8 @@ export class Px {
 
 export function texFrom(canvas, repeat = false) {
   const t = new THREE.CanvasTexture(canvas);
-  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  if (canvas.pxScale) { t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 4; }
+  else { t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; }
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
@@ -627,7 +629,7 @@ T.crystal = (base = '#6ac8f0') => cv(32, 32, (g) => { noiseFill(g, 32, 32, shade
 const tileCache = {};
 export function tileTex(kind, base, extra) {
   const k = kind + (base || '') + (extra || '');
-  if (!tileCache[k]) { reseed(k.length * 131 + k.charCodeAt(0) * 7); tileCache[k] = texFrom(T[kind](base, extra), true); }
+  if (!tileCache[k]) { const hd = hdCanvas(kind, base, extra); if (hd) tileCache[k] = hdTexture(hd); else { reseed(k.length * 131 + k.charCodeAt(0) * 7); tileCache[k] = texFrom(T[kind](base, extra), true); } }
   return tileCache[k];
 }
 
@@ -692,5 +694,7 @@ PROP.chest = (c = {}) => {
   return p.outline();
 };
 PROP.npcMark = (c = {}) => { const p = new Px(8, 10); p.srect(2, 0, 4, 6, ramp(c.color || '#ffe04a')); p.srect(2, 7, 4, 3, ramp(c.color || '#ffe04a')); return p.outline(); };
-export function propPx(kind, c = {}) { reseed(kind.length * 311 + JSON.stringify(c).length * 17); return PROP[kind](c); }
+export function propPx(kind, c = {}) { reseed(kind.length * 311 + JSON.stringify(c).length * 17); const p = PROP[kind](c); p.kind = kind; p.colors = c; return p; }
+// the painted high-resolution version of a prop when there is one, else the pixel sprite
+export function propCanvas(px) { return (px.kind && hdProp(px.kind, px.colors, px.w, px.h)) || px.canvas(); }
 export const PROP_KINDS = Object.keys(PROP);

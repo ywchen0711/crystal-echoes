@@ -393,7 +393,7 @@ export class UI {
         { label: '音效音量', sub: '▮'.repeat(Math.round(st.sfx * 10)) + '▯'.repeat(10 - Math.round(st.sfx * 10)) },
         { label: '畫質', sub: ['流暢', '標準', '精美'][st.quality] },
         { label: '像素風格', sub: ['細緻', '標準', '復古', '關閉'][st.pixel ?? 0] },
-        { label: '角色厚度', sub: (st.depth ?? 0.6) < 0.8 ? '薄' : '標準' },
+        { label: '角色風格', sub: (st.depth ?? 0) === 0 ? '立體書' : st.depth < 0.8 ? '薄' : '標準' },
         { label: '戰鬥速度', sub: '×' + (st.speed || 1) },
         { label: '文字速度', sub: (st.textSpeed || 28) <= 12 ? '快' : (st.textSpeed || 28) >= 40 ? '慢' : '普通' },
         { label: '遇敵', sub: this.G.encMul === 0.5 ? '較少' : '普通' },
@@ -409,7 +409,7 @@ export class UI {
     if (i === 1) st.sfx = Math.max(0, Math.min(1, Math.round((st.sfx + d * 0.1) * 10) / 10));
     if (i === 2) st.quality = (st.quality + (d > 0 ? 1 : 2)) % 3;
     if (i === 3) st.pixel = ((st.pixel ?? 0) + (d > 0 ? 1 : 3)) % 4;
-    if (i === 4) st.depth = (st.depth ?? 0.6) < 0.8 ? 1 : 0.6;
+    if (i === 4) { const v = st.depth ?? 0; st.depth = v === 0 ? 0.6 : v < 0.8 ? 1 : 0; }
     if (i === 5) st.speed = st.speed === 2 ? 1 : 2;
     if (i === 6) st.textSpeed = (st.textSpeed || 28) === 28 ? 10 : (st.textSpeed || 28) === 10 ? 45 : 28;
     if (i === 7) { this.G.encMul = this.G.encMul === 0.5 ? 1 : 0.5; st.enc = this.G.encMul; }

@@ -88,7 +88,7 @@ export class Battle {
       const u = { side: 'party', id, name: HEROES[id].name, hero: id, lv: h.lv, st, hp: Math.max(0, Math.min(h.hp, st.hp)), mp: Math.min(h.mp, st.mp), wpn: hs[0].type, hands: hs, fx, on: h.on || [], echo: h.echo, limit: h.limit || 0, buffs: {}, status: {}, spr, home: slots[i], survived: false, color: HEROES[id].color, immuneSet: new Set(fx.immune || []), block: Math.min(0.6, shields.reduce((a, g) => a + (g.fx?.block || 0), 0)), mblock: shields.reduce((a, g) => a + (g.fx?.mblock || 0), 0), barrier: {} };
       if (fx.first >= 1 || (fx.first && Math.random() < fx.first)) u.firstStrike = true;
       u.alive = u.hp > 0;
-      this.addSprite(u, slots[i][0], slots[i][1]);
+      this.addSprite(u, slots[i][0], slots[i][1]); spr.popDelay = 0.25 + i * 0.09;
       if (u.on.includes('p_autoprotect')) this.buff(u, { def: 2 }, true);
       for (const a of fx.auto || []) { if (a === 'protect') this.buff(u, { def: 1 }, true); else if (a === 'shell') this.buff(u, { spr: 1 }, true); else if (a === 'regen') u.autoRegen = true; else u.status[a] = 99; }
       for (const k in u.buffs) if (fx.auto?.includes(k === 'def' ? 'protect' : 'shell')) u.buffs[k].t = 99;
@@ -107,7 +107,7 @@ export class Battle {
       const st = { hp: E.hp, mp: 999, atk: E.atk, def: E.def, mag: E.mag, spr: E.spr, spd: E.spd };
       if (opts.hard) for (const k of ['hp', 'atk', 'def', 'mag', 'spr']) st[k] = Math.round(st[k] * opts.hard);
       const u = { side: 'enemy', fam: E.fam, traits: new Set(E.traits || []), barrier: {}, id: eid, E, name: E.name + (troop.filter(t => t === eid).length > 1 ? letters[count[eid] - 1] : ''), lv: E.lv, st, hp: st.hp, mp: 999, shield: E.shield, maxShield: E.shield, weak: E.weak, resist: E.resist || [], revealed: new Set(this.S.flags['seen_' + eid] || []), buffs: {}, status: {}, spr, alive: true, broken: false, brokenUntil: -1, boss: !!E.boss, home: eslots[i] };
-      this.addSprite(u, eslots[i][0], eslots[i][1]);
+      this.addSprite(u, eslots[i][0], eslots[i][1]); spr.popDelay = 0.05 + i * 0.09;
       this.units.push(u);
     });
   }
@@ -758,7 +758,7 @@ export class Battle {
     await this.ui.banner(D.name, '召喚', '#ffb04a');
     let px = monsterPx(D.look, D.colors); if (D.look !== 'knight') px = px.flip().flip();
     // summons face the enemies (left), their art already faces left
-    const spr = new VoxelSprite(px, { scale: 2.3, glow: 0.4 });
+    const spr = new VoxelSprite(px, { scale: 2.3, glow: 0.4 }); spr.pop = 1;
     const su = { side: 'summon', sid, D, name: D.name, spr, st: { atk: u.st.mag * 1.1, mag: u.st.mag * 1.2, spd: u.st.spd, hp: 1, def: 0, spr: 0 }, buffs: {}, status: {}, alive: true, turns: 0, on: [], x: 7, z: -0.5, y: 0, ox: 0, oy: 0, flash: 0 };
     spr.mesh.position.set(7, 0, -0.5); spr.mesh.rotation.y = -0.4; this.scene.add(spr.mesh);
     this.summonU = su;

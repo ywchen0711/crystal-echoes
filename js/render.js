@@ -30,11 +30,19 @@ const TiltShift = {
     }`,
 };
 const Grade = {
-  uniforms: { tDiffuse: { value: null }, sat: { value: 0.98 }, contrast: { value: 1.05 }, tint: { value: new THREE.Vector3(1.02, 1.0, 0.97) }, vig: { value: 0.5 }, fade: { value: 0 }, flash: { value: 0 }, flashColor: { value: new THREE.Vector3(1, 1, 1) }, gray: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, paper: { value: 1 }, sat: { value: 0.98 }, contrast: { value: 1.05 }, tint: { value: new THREE.Vector3(1.02, 1.0, 0.97) }, vig: { value: 0.5 }, fade: { value: 0 }, flash: { value: 0 }, flashColor: { value: new THREE.Vector3(1, 1, 1) }, gray: { value: 0 } },
   vertexShader: TiltShift.vertexShader,
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float sat, contrast, vig, fade, flash, gray; uniform vec3 tint, flashColor; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float sat, contrast, vig, fade, flash, gray, paper; uniform vec3 tint, flashColor; varying vec2 vUv;
+    float hsh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     void main(){
       vec4 c = texture2D(tDiffuse, vUv);
+      if (paper > 0.0) {
+        // printed on paper: fine fibres and a warm stock colour
+        vec2 fc = gl_FragCoord.xy;
+        float f = hsh(floor(fc * 0.5)) * 0.55 + hsh(floor(fc * vec2(0.07, 0.6))) * 0.45;
+        c.rgb *= 1.0 + (f - 0.5) * 0.06 * paper;
+        c.rgb = mix(c.rgb, c.rgb * vec3(1.03, 1.0, 0.93), 0.6 * paper);
+      }
       float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
       c.rgb = mix(vec3(l), c.rgb, sat * (1.0 - gray));
       c.rgb = (c.rgb - 0.5) * contrast + 0.5;
@@ -52,13 +60,34 @@ const Grade = {
 // Draws the character layer into a small render target (so every model becomes chunky pixels),
 // then lays it over the full-size scene with a dark one-pixel outline and a little colour banding.
 const PixelComposite = {
-  uniforms: { tDiffuse: { value: null }, tChar: { value: null }, low: { value: new THREE.Vector2(1, 1) }, outline: { value: new THREE.Vector3(0.035, 0.025, 0.07) }, outlineMix: { value: 0.6 }, levels: { value: 14 } },
+  uniforms: { tDiffuse: { value: null }, tChar: { value: null }, low: { value: new THREE.Vector2(1, 1) }, outline: { value: new THREE.Vector3(0.035, 0.025, 0.07) }, outlineMix: { value: 0.6 }, levels: { value: 14 }, paper: { value: 1 }, paperCol: { value: new THREE.Vector3(0.97, 0.94, 0.87) } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `uniform sampler2D tDiffuse, tChar; uniform vec2 low; uniform vec3 outline; uniform float levels, outlineMix; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse, tChar; uniform vec2 low; uniform vec3 outline, paperCol; uniform float levels, outlineMix, paper; varying vec2 vUv;
+    vec2 px, uv;
+    float A(float x, float y) { return texture2D(tChar, uv + vec2(x, y) * px).a; }
+    float hsh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
-      vec2 px = 1.0 / low; vec2 uv = (floor(vUv * low) + 0.5) * px;
+      px = 1.0 / low; uv = (floor(vUv * low) + 0.5) * px;
       vec4 c = texture2D(tChar, uv);
+      if (paper > 0.5) {
+        float gr = hsh(floor(vUv * low));
+        if (c.a >= 0.5) {
+          vec3 g = sqrt(max(c.rgb, 0.0)); g = floor(g * levels + 0.5) / levels;
+          gl_FragColor = vec4(g * g * (0.97 + 0.05 * gr), 1.0); return;
+        }
+        // the white margin left around a cut-out figure
+        float n1 = max(max(max(A(1.0, 0.0), A(-1.0, 0.0)), max(A(0.0, 1.0), A(0.0, -1.0))), max(max(A(1.0, 1.0), A(-1.0, 1.0)), max(A(1.0, -1.0), A(-1.0, -1.0))));
+        n1 = max(n1, max(max(A(2.0, 0.0), A(-2.0, 0.0)), max(A(0.0, 2.0), A(0.0, -2.0))));
+        if (n1 > 0.5) { gl_FragColor = vec4(paperCol * (0.95 + 0.06 * gr), 1.0); return; }
+        // the scissor edge
+        float n2 = max(max(max(A(2.0, 1.0), A(-2.0, 1.0)), max(A(2.0, -1.0), A(-2.0, -1.0))), max(max(A(1.0, 2.0), A(-1.0, 2.0)), max(A(1.0, -2.0), A(-1.0, -2.0))));
+        n2 = max(n2, max(max(A(3.0, 0.0), A(-3.0, 0.0)), max(A(0.0, 3.0), A(0.0, -3.0))));
+        if (n2 > 0.5) { gl_FragColor = vec4(mix(base.rgb, outline, 0.55), 1.0); return; }
+        // the card's soft shadow on the page behind it
+        float sh = (A(-3.0, 4.0) + A(-4.0, 5.0) + A(-3.0, 6.0) + A(-5.0, 4.0)) * 0.25;
+        gl_FragColor = vec4(base.rgb * (1.0 - 0.32 * sh), base.a); return;
+      }
       if (c.a < 0.5) {
         float n = max(max(texture2D(tChar, uv + vec2(px.x, 0.0)).a, texture2D(tChar, uv - vec2(px.x, 0.0)).a), max(texture2D(tChar, uv + vec2(0.0, px.y)).a, texture2D(tChar, uv - vec2(0.0, px.y)).a));
         gl_FragColor = n > 0.5 ? vec4(mix(base.rgb, outline, outlineMix), base.a) : base;
@@ -145,6 +174,7 @@ export function createPost(renderer, scene, camera) {
     },
     tilt(focus, band, amount) { for (const p of [tsH, tsV]) { p.uniforms.focus.value = focus; p.uniforms.band.value = band; p.uniforms.amount.value = amount; } },
     setPixelStyle(v) { px.style = v; px.enabled = v !== 3; px.setSize(px.w, px.h); },
+    setPaper(on) { px.mat.uniforms.paper.value = on ? 1 : 0; grade.uniforms.paper.value = on ? 1 : 0; },
     setCamera(cam) { rp.camera = cam; px.camera = cam; },
     setScene(sc) { rp.scene = sc; px.scene = sc; },
   };

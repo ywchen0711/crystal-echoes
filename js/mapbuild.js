@@ -1,4 +1,5 @@
 // Turns a map definition (ASCII grid + marks) into a lit 3D diorama.
+import { easeBack } from './voxel.js';
 import * as THREE from '../lib/three.module.min.js';
 import { tileTex, propPx, propCanvas, texFrom, Px, ramp, shade, rnd, reseed, personFrame } from './pixel.js';
 import { Sprite, waterMaterial, blobShadow, spriteMaterial, depthMat } from './render.js';
@@ -535,13 +536,26 @@ export function buildMap(scene, map, theme) {
     root.add(im); billboards.push({ im, list });
   }
   // turn every flat sprite toward the camera's heading
+  let curYaw = 0;
+  for (const b of billboards) b.tilt = new Float32Array(b.list.length).fill(-0.18);
+  for (const s of sprites) s.baseX = s.mesh.rotation.x;
+  const E = new THREE.Euler(0, 0, 'YXZ'), qq = new THREE.Quaternion(), V = new THREE.Vector3(), SC = new THREE.Vector3();
   const faceYaw = (yaw) => {
-    const qq = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.18, yaw, 0, 'YXZ'));
-    for (const { im, list } of billboards) { list.forEach(([x, y, z, sc], i) => { M.compose(new THREE.Vector3(x, y, z), qq, new THREE.Vector3(sc, sc, sc)); im.setMatrixAt(i, M); }); im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere?.(); }
+    curYaw = yaw;
+    for (const { im, list, tilt } of billboards) { list.forEach(([x, y, z, sc], i) => { qq.setFromEuler(E.set(tilt[i], yaw, 0, 'YXZ')); M.compose(V.set(x, y, z), qq, SC.set(sc, sc, sc)); im.setMatrixAt(i, M); }); im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere?.(); }
     for (const s of sprites) if (s.mesh.rotation.x !== 0 || s.lean !== false) s.mesh.rotation.set(s.mesh.rotation.x, yaw, 0, 'YXZ');
+  };
+  // pop-up book: everything starts folded flat and stands up in a wave spreading from (cx, cz). returns false once all are up
+  const popUp = (t, cx, cz) => {
+    const amt = (x, z) => { const d = Math.hypot(x - cx, z - cz); if (d > 26) return t > 0 ? 1 : 0; const p = Math.max(0, Math.min(1, (t * 13 - d) / 4)); return p >= 1 ? 1 : easeBack(p); };
+    let busy = false;
+    for (const b of billboards) b.list.forEach(([x, , z], i) => { const a = amt(x, z); if (a < 1) busy = true; b.tilt[i] = -0.18 - (Math.PI / 2 - 0.18) * (1 - a); });
+    for (const s of sprites) { const a = amt(s.mesh.position.x, s.mesh.position.z); if (a < 1) busy = true; s.mesh.rotation.x = s.baseX - (Math.PI / 2 + s.baseX) * (1 - a); }
+    faceYaw(curYaw);
+    return busy;
   };
   // build batched meshes
   for (const k in batches) { const mesh = batches[k].mesh(mats[k]); if (mesh) root.add(mesh); }
   // invisible floor far below for the void
-  return { root, lights, interact, props, anims, sprites, windows, winMat, faceYaw };
+  return { root, lights, interact, props, anims, sprites, windows, winMat, faceYaw, popUp };
 }

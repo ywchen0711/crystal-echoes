@@ -2,7 +2,7 @@
 import * as THREE from '../lib/three.module.min.js';
 import { createRenderer, createPost } from './render.js';
 import { Field, setHeroLook } from './field.js';
-import { setDepth } from './voxel.js';
+import { setDepth, setPaper, setPaperCam } from './voxel.js';
 import { Battle } from './battle.js';
 import { UI, fmtTime } from './ui.js';
 import { Audio } from './audio.js';
@@ -75,6 +75,7 @@ class Game {
     requestAnimationFrame((t) => this.loop(t));
   }
   draw(scene, cam, focus, band, amount) {
+    setPaperCam(cam);
     const q = this.S.settings.quality;
     if (q === 0) { cam.layers.enableAll(); this.renderer.render(scene, cam); return; }
     if (this.post.px.enabled) cam.layers.set(0); else cam.layers.enableAll();
@@ -119,7 +120,7 @@ class Game {
     this.encMul = st.enc || 1;
     this.resize();
     this.post.setPixelStyle(st.pixel ?? 0);
-    setDepth(st.depth ?? 0.6);
+    const dv = st.depth ?? 0; setDepth(dv || 0.6); setPaper(dv === 0); this.post.setPaper(dv === 0);
   }
 
   // ---------------------------------------------------------------- field input

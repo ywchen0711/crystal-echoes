@@ -10,6 +10,15 @@ const LEG = 17;       // leg length in voxels
 const HEAD = 0.8;     // heads are drawn finer and smaller than the body (less chibi)
 let DEPTH = 0.6;      // front-to-back thickness (1 = full voxel depth)
 export function setDepth(v) { DEPTH = v; }
+// pop-up book mode: every figure is a thin card that faces the reader, stands up off the page and flips when it turns
+let PAPER = true, PAPER_CAM = null;
+const PAPER_D = 0.1, POP_T = 0.42, FLIP_T = 0.2;
+export function setPaper(on) { PAPER = !!on; }
+export function isPaper() { return PAPER; }
+export function setPaperCam(c) { PAPER_CAM = c; }
+const _dir = new THREE.Vector3();
+function camYaw(mesh) { if (!PAPER_CAM) return 0; PAPER_CAM.getWorldDirection(_dir); return Math.atan2(-_dir.x, -_dir.z) - mesh.rotation.y; }
+export const easeBack = (t) => { const c = 1.9; t -= 1; return 1 + t * t * ((c + 1) * t + c); };
 const SKINS = { light: '#f3c9a4', tan: '#d9a274', dark: '#9c6a48', pale: '#f6dccb', green: '#9cc79a', blue: '#9db3e0' };
 
 // ---------------------------------------------------------------- voxel grid + mesher
@@ -359,7 +368,9 @@ export class VoxelPerson {
     const G = geometriesFor(look);
     const part = (geo, parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); if (geo) { const m = new THREE.Mesh(geo, this.mat); m.castShadow = true; g.add(m); } parent.add(g); return g; };
     this.mesh = new THREE.Group();
-    this.body = new THREE.Group(); this.body.scale.setScalar(VS * this.scale); this.mesh.add(this.body);
+    this.card = new THREE.Group(); this.mesh.add(this.card);
+    this.body = new THREE.Group(); this.body.scale.setScalar(VS * this.scale); this.card.add(this.body);
+    this.paper = !opts.noPaper; this.pop = this.paper && PAPER ? 0 : 1; this.popDelay = 0; this.flipT = 0; this.side = 0;
     this.legL = part(G.leg, this.body, 3, LEG + 0.5, 0);
     this.legR = part(G.leg, this.body, -3, LEG + 0.5, 0);
     this.torso = part(G.torso, this.body, 0, LEG + 0.5, 0);
@@ -408,6 +419,23 @@ export class VoxelPerson {
     if (this.cape) this.cape.rotation.x = 0.12 + (this.moving ? 0.35 + Math.sin(this.t * 9) * 0.06 : 0) + Math.max(0, -c.torso) * 0.5;
     if (this.battle && this.frame === BWIN) { this.body.position.y = Math.abs(Math.sin(this.t * 6)) * 0.12; }
     else this.body.position.y = 0;
+    if (PAPER && this.paper) {
+      // a card cut from the page: flattened toward the reader, the figure printed on it at its own angle
+      const yaw = camYaw(this.mesh), rel = this.ang - yaw, sn = Math.sin(rel);
+      if (this.pop < 1) { if (this.popDelay > 0) this.popDelay -= dt; else this.pop = Math.min(1, this.pop + dt / POP_T); }
+      const side = sn > 0.25 ? 1 : sn < -0.25 ? -1 : this.side;
+      if (side !== this.side) { if (this.side && this.pop >= 1) this.flipT = FLIP_T; this.side = side; }
+      this.flipT = Math.max(0, this.flipT - dt);
+      const fl = this.flipT > 0 ? Math.max(0.04, Math.abs(Math.cos((1 - this.flipT / FLIP_T) * Math.PI))) : 1;
+      const up = this.pop >= 1 ? 1 : easeBack(this.pop);
+      // knocked out: the card falls flat on its back
+      this.card.rotation.set(-0.15 - (Math.PI / 2 - 0.15) * (1 - up) - 1.3 * c.lie, yaw, 0, 'YXZ');
+      this.card.scale.set(fl, 1, PAPER_D);
+      this.body.rotation.set(0, rel, 0);
+      this.body.scale.setScalar(VS * this.scale);
+      return;
+    }
+    this.card.rotation.set(0, 0, 0); this.card.scale.set(1, 1, 1);
     // knocked out: lie on the back
     this.body.rotation.set(-1.5 * c.lie, this.ang, 0, 'YXZ');
     this.body.scale.set(VS * this.scale, VS * this.scale, VS * this.scale * DEPTH);
@@ -437,7 +465,7 @@ export function renderPortrait(look, mode = 'face') {
   }
   const { r, scene, cam } = PR;
   r.setSize(W, H, false); cam.aspect = W / H; cam.updateProjectionMatrix();
-  const v = new VoxelPerson(look, { battle: mode === 'battle', angle: mode === 'battle' ? -0.55 : 0.3, glow: 0.08 });
+  const v = new VoxelPerson(look, { battle: mode === 'battle', angle: mode === 'battle' ? -0.55 : 0.3, glow: 0.08, noPaper: true });
   if (mode === 'battle') v.setFrame(8);
   for (let i = 0; i < 40; i++) v.tick(0.05);
   v.t = 0; v.tick(0.0001);
@@ -499,13 +527,22 @@ export class VoxelSprite {
     if (!geo) { geo = meshGrid(slab(px), 0.03); slabCache.set(key, geo); }
     this.glow = opts.glow ?? 0.16; this.mat = voxelMaterial(this.glow);
     this.inner = new THREE.Mesh(geo, this.mat); this.inner.castShadow = true;
-    const k = this.scale / 16; this.inner.scale.set(k, k, k * (0.4 + DEPTH * 0.6)); this.inner.position.y = 0.5 * k;
-    this.mesh = new THREE.Group(); this.mesh.add(this.inner); toLayer(this.mesh);
+    const k = this.scale / 16; this.k = k; this.inner.scale.set(k, k, k * (0.4 + DEPTH * 0.6)); this.inner.position.y = 0.5 * k;
+    this.card = new THREE.Group(); this.card.add(this.inner);
+    this.mesh = new THREE.Group(); this.mesh.add(this.card); toLayer(this.mesh);
+    this.pop = PAPER ? 0 : 1; this.popDelay = 0;
     this.w = px.w * k; this.h = px.h * k;
     this.frame = 0;
   }
   setFrame(i) { this.frame = i; }
-  tick() { }
+  tick(dt = 0.016) {
+    const k = this.k;
+    if (!PAPER) { this.card.rotation.set(0, 0, 0); this.inner.scale.set(k, k, k * (0.4 + DEPTH * 0.6)); return; }
+    if (this.pop < 1) { if (this.popDelay > 0) this.popDelay -= dt; else this.pop = Math.min(1, this.pop + dt / POP_T); }
+    const up = this.pop >= 1 ? 1 : easeBack(this.pop);
+    this.card.rotation.set(-0.15 - (Math.PI / 2 - 0.15) * (1 - up), camYaw(this.mesh), 0, 'YXZ');
+    this.inner.scale.set(k, k, k * PAPER_D * 1.5);
+  }
   dispose() { this.mat.dispose(); }
 }
 const OUTLINE = '#1c1424';

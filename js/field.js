@@ -3,7 +3,7 @@ import * as THREE from '../lib/three.module.min.js';
 import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js';
 import { parseMap, buildMap, groundAt } from './mapbuild.js';
 import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js';
-import { VoxelPerson } from './voxel.js';
+import { VoxelPerson, isPaper } from './voxel.js';
 import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js';
 import { HEROES, ECHOES } from './data.js';
 
@@ -118,6 +118,13 @@ export class Field {
     this.danger = 0;
     this.world = !!def.world;
     this.G.ui.areaName(def.name);
+    // pop-up book: the scenery folds up from the page, spreading out from the hero
+    this.popT = null;
+    if (isPaper()) {
+      this.popT = -0.3; this.built.popUp(this.popT, this.player.x, this.player.z);
+      this.player.spr.popDelay = 0.2;
+      for (const n of this.npcs) n.spr.popDelay = 0.3 + Math.hypot(n.x - this.player.x, n.z - this.player.z) / 13;
+    }
   }
   unload() {
     if (this.built) { this.scene.remove(this.built.root); this.built.root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
@@ -138,7 +145,7 @@ export class Field {
     this.scene.add(root);
     return { root, spr, x: 0, z: 0, y: 0, dir: 'down', anim: 0, moving: false };
   }
-  setLeader(look) { if (!this.player) return; const { x, z, dir } = this.player; this.scene.remove(this.player.root); this.player = this.makeWalker(look); this.placePlayer(x, z, dir); }
+  setLeader(look) { if (!this.player) return; const { x, z, dir } = this.player; this.scene.remove(this.player.root); this.player = this.makeWalker(look); this.player.spr.pop = 1; this.placePlayer(x, z, dir); }
   placePlayer(x, z, dir) { const p = this.player; p.x = x + 0.5; p.z = z + 0.5; p.dir = dir; p.ang = null; p.y = groundAt(this.map, p.x, p.z); this.syncWalker(p); p.spr.snapFacing?.(); }
   syncWalker(w) {
     w.root.position.set(w.x, w.y + (w.hop || 0), w.z);
@@ -238,6 +245,7 @@ export class Field {
     }
     if (p) p.spr.tick?.(dt);
     for (const n of this.npcs) n.spr.tick?.(dt);
+    if (this.popT != null) { this.popT += dt; if (!this.built.popUp(this.popT, this.player.x, this.player.z)) this.popT = null; }
     // camera
     this.updateCamera(dt);
     // lights near the camera

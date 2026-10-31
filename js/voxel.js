@@ -136,10 +136,12 @@ function partsFor(s) {
     const x0 = sx < 0 ? -4 : 3;
     for (let i = 0; i < 2; i++) { const x = x0 + i; paint(x, 6, '#1e1830'); paint(x, 5, eye); paint(x, 4, shade(eye, -0.25)); }
     paint(sx < 0 ? -3 : 4, 5, '#ffffff');
+    paint(sx < 0 ? -5 : 5, 5, '#f4f0ea'); paint(sx < 0 ? -5 : 5, 4, '#e8e0d8');
+    paint(x0, 8, shade(H, -0.3)); paint(x0 + 1, 8, shade(H, -0.3)); paint(sx < 0 ? x0 - 1 : x0 + 2, 7, shade(H, -0.3));
     paint(sx * 5, 3, mix(skin, '#ff7a7a', 0.35));
     hd.box(sx * 8, sx * 8, 3, 6, -1, 0, shade(skin, -0.08));
   }
-  paint(0, 2, mix(skin, '#9a3a3a', 0.5));
+  paint(0, 2, mix(skin, '#9a3a3a', 0.5)); paint(-1, 2, mix(skin, '#9a3a3a', 0.25)); paint(1, 2, mix(skin, '#9a3a3a', 0.25));
   paint(0, 4, shade(skin, -0.06), 1);
   if (s.beard) {
     const Bd = s.beard;

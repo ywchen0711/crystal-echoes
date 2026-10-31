@@ -52,16 +52,16 @@ const Grade = {
 // Draws the character layer into a small render target (so every model becomes chunky pixels),
 // then lays it over the full-size scene with a dark one-pixel outline and a little colour banding.
 const PixelComposite = {
-  uniforms: { tDiffuse: { value: null }, tChar: { value: null }, low: { value: new THREE.Vector2(1, 1) }, outline: { value: new THREE.Vector3(0.035, 0.025, 0.07) }, levels: { value: 14 } },
+  uniforms: { tDiffuse: { value: null }, tChar: { value: null }, low: { value: new THREE.Vector2(1, 1) }, outline: { value: new THREE.Vector3(0.035, 0.025, 0.07) }, outlineMix: { value: 0.6 }, levels: { value: 14 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `uniform sampler2D tDiffuse, tChar; uniform vec2 low; uniform vec3 outline; uniform float levels; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse, tChar; uniform vec2 low; uniform vec3 outline; uniform float levels, outlineMix; varying vec2 vUv;
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
       vec2 px = 1.0 / low; vec2 uv = (floor(vUv * low) + 0.5) * px;
       vec4 c = texture2D(tChar, uv);
       if (c.a < 0.5) {
         float n = max(max(texture2D(tChar, uv + vec2(px.x, 0.0)).a, texture2D(tChar, uv - vec2(px.x, 0.0)).a), max(texture2D(tChar, uv + vec2(0.0, px.y)).a, texture2D(tChar, uv - vec2(0.0, px.y)).a));
-        gl_FragColor = n > 0.5 ? vec4(mix(base.rgb, outline, 0.88), base.a) : base;
+        gl_FragColor = n > 0.5 ? vec4(mix(base.rgb, outline, outlineMix), base.a) : base;
         return;
       }
       vec3 g = sqrt(max(c.rgb, 0.0));
@@ -72,7 +72,7 @@ const PixelComposite = {
 export class PixelCharPass extends Pass {
   constructor(scene, camera) {
     super();
-    this.scene = scene; this.camera = camera; this.factor = 3; this.enabled = true;
+    this.scene = scene; this.camera = camera; this.factor = 3; this.enabled = true; this.style = 0;
     this.rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
     this.depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
     this.mat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(PixelComposite.uniforms), vertexShader: PixelComposite.vertexShader, fragmentShader: PixelComposite.fragmentShader, depthTest: false, depthWrite: false });
@@ -81,8 +81,11 @@ export class PixelCharPass extends Pass {
   }
   setSize(w, h) {
     this.w = w; this.h = h;
-    // aim for characters roughly 40-50 pixels tall, like Octopath's sprites
-    this.factor = Math.max(2, Math.round(h / 230));
+    // style 0 fine (soft, detailed), 1 standard, 2 retro (chunky, Octopath-like)
+    const div = [470, 320, 230][this.style] || 470;
+    this.factor = Math.max(this.style === 0 ? 1.5 : 2, h / div);
+    this.mat.uniforms.levels.value = [40, 22, 14][this.style] || 40;
+    this.mat.uniforms.outlineMix.value = [0.5, 0.72, 0.88][this.style] || 0.5;
     const lw = Math.max(1, Math.floor(w / this.factor)), lh = Math.max(1, Math.floor(h / this.factor));
     this.rt.setSize(lw, lh); this.mat.uniforms.low.value.set(lw, lh);
   }
@@ -141,6 +144,7 @@ export function createPost(renderer, scene, camera) {
       tsH.uniforms.res.value.copy(s); tsV.uniforms.res.value.copy(s);
     },
     tilt(focus, band, amount) { for (const p of [tsH, tsV]) { p.uniforms.focus.value = focus; p.uniforms.band.value = band; p.uniforms.amount.value = amount; } },
+    setPixelStyle(v) { px.style = v; px.enabled = v !== 3; px.setSize(px.w, px.h); },
     setCamera(cam) { rp.camera = cam; px.camera = cam; },
     setScene(sc) { rp.scene = sc; px.scene = sc; },
   };

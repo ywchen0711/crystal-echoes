@@ -75,7 +75,7 @@ class Game {
   draw(scene, cam, focus, band, amount) {
     const q = this.S.settings.quality;
     if (q === 0) { cam.layers.enableAll(); this.renderer.render(scene, cam); return; }
-    cam.layers.set(0);
+    if (this.post.px.enabled) cam.layers.set(0); else cam.layers.enableAll();
     this.post.setScene(scene); this.post.setCamera(cam); this.post.tilt(focus, band, q === 2 ? amount : amount * 0.8);
     this.post.composer.render();
   }
@@ -116,6 +116,7 @@ class Game {
     this.renderer.shadowMap.enabled = st.quality > 0;
     this.encMul = st.enc || 1;
     this.resize();
+    this.post.setPixelStyle(st.pixel ?? 0);
   }
 
   // ---------------------------------------------------------------- field input

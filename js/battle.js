@@ -1,13 +1,13 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=12';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=12';
-import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=12';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=12';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=12';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=12';
-import { lookOf } from './field.js?v=12';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=12';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=13';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=13';
+import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=13';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=13';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=13';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=13';
+import { lookOf } from './field.js?v=13';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=13';
 
 const ENEMY_DMG = 1.55;
 const BG = {
@@ -170,7 +170,8 @@ export class Battle {
     this.auto = !!this.S.settings.auto;
     this.ui = new BattleUI(this);
     this.ui.show();
-    this.G.audio.music(opts.music || (this.units.some(u => u.boss) ? 'boss' : 'battle'));
+    const area = this.G.field?.def?.bgm || this.G.field?.theme?.bgm; // caves, ruins and the end of the world get the darker battle theme
+    this.G.audio.music(opts.music || (this.units.some(u => u.boss) ? 'boss' : ['dungeon', 'dungeon2', 'mine', 'last', 'night'].includes(area) ? 'battle2' : 'battle'));
     this.active = true;
     await this.intro();
     if (opts.preemptive) this.msg('先制攻擊！');
@@ -874,7 +875,7 @@ export class Battle {
     if (t.hp <= 0 && t.side === 'party' && t.on.includes('p_survive') && !t.survived) { t.hp = 1; t.survived = true; this.pop(t, '不屈！', '#ffb04a'); }
     this.number(t, d, o.weak ? '#ffe04a' : o.color || (t.side === 'party' ? '#ff8a8a' : '#ffffff'), o);
     t.flash = 1; t.shakeT = 0.3;
-    if (t.side === 'party') { t.limit = Math.min(100, t.limit + Math.round(d / t.st.hp * 70 * (1 + (t.fx?.limitup || 0)) * ((t.key === 'rage' && t.hp < t.st.hp * 0.5) || (t.on?.includes('p_bloodrage') && t.hp < t.st.hp * 0.3) ? 2 : 1))); if (t.hp > 0) t.spr.setFrame(BPOSE.hurt); }
+    if (t.side === 'party') { t.limit = Math.min(100, t.limit + Math.round(d / t.st.hp * 70 * (1 + (t.fx?.limitup || 0)) * ((t.key === 'rage' && t.hp < t.st.hp * 0.5) || (t.on?.includes('p_bloodrage') && t.hp < t.st.hp * 0.3) ? 2 : 1))); if (t.hp > 0) { t.spr.setFrame(BPOSE.hurt); t.hurtT = 0.45; } }
     this.G.audio.sfx(o.weak ? 'weak' : 'hit');
     if (t.hp <= 0) t.dying = true;
     this.ui.refresh();
@@ -1109,8 +1110,12 @@ export class Battle {
       if (u.flash > 0) { u.flash = Math.max(0, u.flash - dt * 4); const f = Math.max(u.spr.glow ?? 0.18, u.flash); u.spr.mat.emissive.setRGB(f, f, f); }
       else if (u.side !== 'summon') { const g = u.spr.glow ?? 0.18; u.spr.mat.emissive.setRGB(g, g, g); }
       if (u.side === 'enemy' && u.broken && u.alive) u.spr.mesh.rotation.z = 0.2 + Math.sin(this.t * 6) * 0.03; else if (u.side === 'enemy') u.spr.mesh.rotation.z = 0;
-      if (u.side === 'party' && u.alive && !this.current && u.spr.frame <= 1) u.spr.setFrame(Math.floor(this.t * 1.6 + u.x) % 2 ? BPOSE.idle2 : BPOSE.idle);
-      if (u.side === 'party' && u.alive && u.hp < u.st.hp * 0.25 && u.spr.frame <= 1) u.spr.setFrame(BPOSE.hurt);
+      // a hit makes them flinch for a moment, then they settle back: standing, or down on one knee when badly hurt
+      if (u.hurtT > 0) u.hurtT -= dt;
+      if (u.side === 'party' && u.alive && !(u.hurtT > 0)) {
+        const f = u.spr.frame, rest = f <= 1 || f === BPOSE.hurt || f === BPOSE.weak;
+        if (rest) u.spr.setFrame(u.hp < u.st.hp * 0.25 ? BPOSE.weak : Math.floor(this.t * 1.6 + u.x) % 2 ? BPOSE.idle2 : BPOSE.idle);
+      }
     }
     // camera: gentle sway, intro sweep, focus on the actor, zoom for resonance
     const cur = this.current;
@@ -1159,7 +1164,7 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=12');
+    const { gainExp, gainBond } = await import('./party.js?v=13');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);

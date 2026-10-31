@@ -1,7 +1,7 @@
 // The save state and everything derived from it: stats, skills, echoes, levels, items.
-import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, EXP_NEXT, AP_CAP, BOND_EXP, STAR_COST, SUMMONS, ECHO_ORDER } from './data.js?v=12';
-import { APT, WTYPES, ARTS_BY_TYPE, MASTERY_AT, mergeFx } from './content.js?v=12';
-import { setBonus } from './depth.js?v=12';
+import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, EXP_NEXT, AP_CAP, BOND_EXP, STAR_COST, SUMMONS, ECHO_ORDER } from './data.js?v=13';
+import { APT, WTYPES, ARTS_BY_TYPE, MASTERY_AT, mergeFx } from './content.js?v=13';
+import { setBonus } from './depth.js?v=13';
 
 export const EQUIP_SLOTS = ['R', 'L', 'head', 'body', 'arms', 'waist', 'legs', 'feet', 'back', 'acc1', 'acc2'];
 export const SLOT_N = { R: '右手', L: '左手', head: '頭', body: '身體', arms: '手', waist: '腰', legs: '腿', feet: '腳', back: '背', acc1: '飾品1', acc2: '飾品2' };
@@ -243,21 +243,22 @@ export function gearLook(G, hero) {
   if (!G) return {};
   const c = gearColor(G), a = gearAccent(G), t = G.tier || 0, H = hero ? HEROES[hero] : null, o = {};
   if (G.slot === 'hand') {
-    if (G.type === 'shield') { o.shield = true; o.shieldColor = c; o.shieldEmblem = a || (t >= 4 ? '#e8c050' : undefined); o.shieldRim = t >= 6 ? '#fff0b0' : t >= 2 ? '#e8c050' : darker(c, 0.7); }
-    else { o.weapon = WTYPES[G.type]?.model ?? null; o.weaponMetal = METAL_C[Math.min(7, t)]; o.weaponAccent = a; }
+    if (G.type === 'shield') { o.shield = true; o.shieldKind = G.kind || 'kite'; o.shieldTier = t; o.shieldColor = c; o.shieldEmblem = a || (t >= 4 ? '#e8c050' : undefined); o.shieldRim = t >= 6 ? '#fff0b0' : t >= 2 ? '#e8c050' : darker(c, 0.7); }
+    else { o.weapon = G.type === 'knuckle' ? 'knuckle' : WTYPES[G.type]?.model ?? null; o.weaponTier = t; o.weaponRefine = G.refine || 0; o.weaponMetal = METAL_C[Math.min(7, t)]; o.weaponAccent = a; }
   } else if (G.slot === 'head') {
     if (G.style === 'heavy') { o.hat = t >= 6 ? 'crown' : t >= 4 ? 'horned' : 'helm'; o.hatColor = c; o.hatBand = a || (t >= 2 ? (t >= 6 ? '#e8c050' : '#c83a3a') : undefined); }
     else if (G.style === 'light') { o.hat = ['cap', 'band', 'feather'][t % 3]; o.hatColor = c; o.hatBand = a || '#c83a3a'; }
     else { o.hat = t >= 6 ? 'circlet' : (H?.look.hat === 'wizard' ? 'wizard' : 'hood'); o.hatColor = t >= 6 ? '#e8c050' : c; o.hatBand = a || (t >= 3 ? '#e8c050' : undefined); }
   } else if (G.slot === 'body') {
     o.top = c; o.robe = G.style === 'robe';
-    if (G.style === 'heavy') { o.pauldron = darker(c, 1.08); o.trim = t >= 4 ? '#e8c050' : undefined; }
+    if (G.style === 'heavy') { o.pauldron = darker(c, 1.08); o.trim = t >= 4 ? '#e8c050' : undefined; o.plate = t; o.pauldronSpike = t >= 5; }
+    if (G.style === 'light' && t >= 2) o.straps = darker(c, 0.6);
     if (G.style === 'robe') { o.trim = t >= 3 ? '#e8c050' : undefined; o.collar = t >= 3 ? '#e8c050' : undefined; }
     o.emblem = a || undefined;
   } else if (G.slot === 'arms') { o.gloves = c; o.cuff = a || undefined; if (G.style === 'heavy') o.pauldronFromArms = darker(c, 1.08); }
-  else if (G.slot === 'waist') { o.belt = darker(c, 0.8); o.buckle = a || (t >= 3 ? '#e8c050' : undefined); }
-  else if (G.slot === 'legs') o.legs = darker(c, 0.9);
-  else if (G.slot === 'feet') o.boots = darker(c, 0.85);
+  else if (G.slot === 'waist') { o.belt = darker(c, 0.8); o.buckle = a || (t >= 3 ? '#e8c050' : undefined); if (G.style === 'robe') o.sash = c; }
+  else if (G.slot === 'legs') { o.legs = darker(c, 0.9); if (G.style === 'heavy') o.knee = c; }
+  else if (G.slot === 'feet') { o.boots = darker(c, 0.85); if (G.style === 'heavy' && t >= 2) o.sabaton = c; }
   else if (G.slot === 'back') { o.cape = a ? darker(a, 0.75) : G.style === 'heavy' ? (H?.look.cape || darker(c, 0.7)) : darker(c, 0.95); o.capeTrim = t >= 4 ? '#e8c050' : undefined; }
   return o;
 }
@@ -279,7 +280,8 @@ export function paperLook(S, id, equipOverride) {
   const R = g('R'), Lh = g('L');
   const wpn = [R, Lh].filter(x => x && x.type !== 'shield'), shield = [Lh, R].find(x => x?.type === 'shield');
   if (wpn[0]) Object.assign(L, gearLook(wpn[0], id));
-  if (wpn[1]) { const f = gearLook(wpn[1], id); L.weaponL = f.weapon; L.weaponLMetal = f.weaponMetal; L.weaponLAccent = f.weaponAccent; }
+  if (wpn[1]) { const f = gearLook(wpn[1], id); L.weaponL = f.weapon; L.weaponLTier = f.weaponTier; L.weaponLRefine = f.weaponRefine; L.weaponLMetal = f.weaponMetal; L.weaponLAccent = f.weaponAccent; }
+  else if (wpn[0]?.type === 'knuckle' && !shield) { L.weaponL = 'knuckle'; L.weaponLTier = L.weaponTier; L.weaponLMetal = L.weaponMetal; L.weaponLAccent = L.weaponAccent; } // fist weapons come in pairs
   if (shield) Object.assign(L, gearLook(shield, id));
   for (const sl of ['head', 'arms', 'waist', 'legs', 'feet', 'back']) { const G = g(sl); if (!G) continue; const f = gearLook(G, id); if (f.pauldronFromArms && !L.pauldronSet) L.pauldron = f.pauldronFromArms; delete f.pauldronFromArms; Object.assign(L, f); }
   const bd = g('body');

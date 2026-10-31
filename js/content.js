@@ -1,8 +1,8 @@
 // Generated content: weapon types with their own battle rules, 1000+ pieces of equipment with effects,
 // 400 spells, 500 items and the weapon arts. Everything is built from tables so it stays consistent.
-import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=12';
-import { BESTIARY_NEW } from './monsters.js?v=12';
-import { applyDepth } from './depth.js?v=12';
+import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=13';
+import { BESTIARY_NEW } from './monsters.js?v=13';
+import { applyDepth } from './depth.js?v=13';
 export { BESTIARY_NEW };
 
 export const ELS = ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'];
@@ -316,7 +316,7 @@ for (const [wt, W] of Object.entries(WTYPES)) {
 // shields
 for (const [sk, S] of Object.entries(SHIELD_KINDS)) for (let t = 0; t < 8; t++) {
   const id = `g_${sk}${t + 1}`;
-  const g = { name: MATS.metal[t] + S.n, slot: 'hand', type: 'shield', hands: 1, tier: t, price: Math.round(T_PRICE[t] * 0.8), def: Math.round(T_DEF[t] * 0.3 * S.def), spr: Math.round(T_DEF[t] * 0.2 * S.spr), fx: { block: S.block + t * 0.01, ...(S.mblock ? { mblock: S.mblock } : {}) } };
+  const g = { name: MATS.metal[t] + S.n, slot: 'hand', type: 'shield', kind: sk, hands: 1, tier: t, price: Math.round(T_PRICE[t] * 0.8), def: Math.round(T_DEF[t] * 0.3 * S.def), spr: Math.round(T_DEF[t] * 0.2 * S.spr), fx: { block: S.block + t * 0.01, ...(S.mblock ? { mblock: S.mblock } : {}) } };
   if (S.spd) g.spd = S.spd;
   put(id, g);
 }

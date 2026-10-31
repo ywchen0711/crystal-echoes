@@ -24,14 +24,14 @@ class G {
 export const THEMES = {
   port: { tiles: { main: ['cobble', '#cdbb9a'], second: ['grass', '#5c9a44'], third: ['dirt', '#7a6a5a'], fourth: ['brick', '#b8aa94'], wood: ['wood', '#9a6a3c'], grass: ['grass', '#5c9a44'], temple: ['temple', '#d8d0c0'] }, wall: ['stonewall', '#aaa294'], roof: '#3a74b8', sky: ['#6aa0e8', '#f4e4c8'], light: 'day', water: '#3a7ab8', motes: '#fff2c0', bgm: 'town', fog: ['#c8d8e8', 30, 70] },
   portNight: { tiles: { main: ['cobble', '#b8a88a'], second: ['grass', '#4a8a3a'], third: ['dirt', '#5a4a3a'], wood: ['wood', '#8a5a30'], temple: ['temple', '#c8c0b0'] }, wall: ['stonewall', '#8a8478'], roof: '#2a5aa0', sky: ['#1a2050', '#5a4a7a'], light: 'night', night: true, water: '#1a3a6a', waterDeep: '#0a1a3a', motes: '#ffe8a0', bgm: 'night', fog: ['#1a2040', 20, 60] },
-  interior: { tiles: { main: ['wood', '#9a6a3c'], second: ['carpet', '#8a2a3a'], temple: ['temple', '#d8d0c0'] }, wall: ['plaster', '#e8dcc0', '#6a4428'], cap: ['wood', '#5a3a24'], wallH: 2.6, sky: ['#1a1410', '#1a1410'], light: 'interior', night: true, bgm: null, edgeDrop: -0.5, fog: ['#100c08', 14, 40] },
+  interior: { tiles: { main: ['wood', '#9a6a3c'], second: ['carpet', '#8a2a3a'], temple: ['temple', '#d8d0c0'] }, wall: ['plaster', '#e8dcc0', '#6a4428'], cap: ['wood', '#5a3a24'], wallH: 2.6, sky: ['#1a1410', '#1a1410'], light: 'interior', night: true, bgm: 'inn', edgeDrop: -0.5, fog: ['#100c08', 14, 40] },
   sanctum: { tiles: { main: ['temple', '#d8d8e8'], second: ['carpet', '#3a4a8a'] }, wall: ['temple', '#b8bcd8'], cap: ['temple', '#9a9ec0'], wallH: 3.2, sky: ['#0a0a1a', '#1a1a3a'], light: 'sanctum', night: true, bgm: 'sanctum', edgeDrop: -0.5, motes: '#ffe8a0', fog: ['#0a0a20', 14, 40] },
   field: { tiles: { main: ['grass', '#62a046'], second: ['dirt', '#b08a5a'], third: ['dirt', '#7a6a50'], sand: ['sand', '#e2cc94'], snow: ['snow', '#eef2f8'], grass: ['grass', '#62a046'], cobble: ['cobble', '#c8b89a'] }, wall: ['stonewall', '#8a8a72'], cap: ['grass', '#4e8a3c'], cliffTile: 'main', wallH: 1.6, sky: ['#5a96e8', '#f0e8d0'], light: 'day', water: '#3a78c0', tree: 'tree', bgm: 'world', motes: '#fff8d0', fog: ['#d8e4f0', 40, 110], edgeDrop: -1 },
   forest: { tiles: { main: ['grass', '#4a8038'], second: ['dirt', '#8a6a44'], third: ['dirt', '#5a4a38'], grass: ['grass', '#3e7030'] }, wall: ['stonewall', '#6a6a58'], cap: ['grass', '#3a6a2a'], wallH: 1.6, sky: ['#3a6a5a', '#a8c8a0'], light: 'forest', water: '#2a6a7a', waterDeep: '#0a2a2a', tree: 'tree', treeColors: { leaf: '#3a7a3a' }, bushColor: '#3a7a34', bgm: 'forest', motes: '#d8ffa0', fireflies: true, fog: ['#5a7a5a', 16, 50] },
-  mountain: { tiles: { main: ['dirt', '#a8865a'], second: ['dirt', '#8a6a48'], third: ['dirt', '#6a5a48'], grass: ['grass', '#7a9a4a'] }, wall: ['stonewall', '#9a8a74'], cap: ['dirt', '#8a7a5a'], wallH: 2, sky: ['#6a9ae0', '#f0e0c8'], light: 'day', tree: 'pine', bgm: 'world', fog: ['#e0d8c8', 30, 80] },
+  mountain: { tiles: { main: ['dirt', '#a8865a'], second: ['dirt', '#8a6a48'], third: ['dirt', '#6a5a48'], grass: ['grass', '#7a9a4a'] }, wall: ['stonewall', '#9a8a74'], cap: ['dirt', '#8a7a5a'], wallH: 2, sky: ['#6a9ae0', '#f0e0c8'], light: 'day', tree: 'pine', bgm: 'highland', fog: ['#e0d8c8', 30, 80] },
   anvil: { tiles: { main: ['cobble', '#a89a88'], second: ['metal', '#6a7480'], third: ['dirt', '#5a4a3a'], wood: ['wood', '#7a4a28'], brick: ['brick', '#a86a4a'] }, wall: ['brick', '#8a5a44'], roof: '#b84a3a', houseWall: ['brick', '#b07a5a'], sky: ['#e89a6a', '#f4d8b0'], light: 'dusk', water: '#3a6a8a', bgm: 'anvil', motes: '#ffc890', fog: ['#e8b890', 24, 70] },
-  mine: { tiles: { main: ['cave', '#6a5e70'], second: ['dirt', '#5a4a3a'], third: ['cave', '#3a3440'], metal: ['metal', '#5a6470'], wood: ['wood', '#6a4428'] }, wall: ['cave', '#4a4250'], cap: ['cave', '#3a3440'], wallH: 3, sky: ['#0a080c', '#1a1418'], light: 'cave', night: true, water: '#2a5a7a', bgm: 'dungeon', motes: '#8affb0', fog: ['#0c0a10', 10, 34], pillar: ['cave', '#5a5262'] },
-  coast: { tiles: { main: ['sand', '#e8d4a0'], second: ['grass', '#6aa64a'], third: ['dirt', '#9a8a6a'] }, wall: ['stonewall', '#a89a84'], cap: ['grass', '#5a9a40'], wallH: 1.4, sky: ['#5aa8f0', '#f4ecd8'], light: 'day', tree: 'palm', water: '#2a8ac8', bgm: 'world', fog: ['#e0f0f8', 30, 90] },
+  mine: { tiles: { main: ['cave', '#6a5e70'], second: ['dirt', '#5a4a3a'], third: ['cave', '#3a3440'], metal: ['metal', '#5a6470'], wood: ['wood', '#6a4428'] }, wall: ['cave', '#4a4250'], cap: ['cave', '#3a3440'], wallH: 3, sky: ['#0a080c', '#1a1418'], light: 'cave', night: true, water: '#2a5a7a', bgm: 'mine', motes: '#8affb0', fog: ['#0c0a10', 10, 34], pillar: ['cave', '#5a5262'] },
+  coast: { tiles: { main: ['sand', '#e8d4a0'], second: ['grass', '#6aa64a'], third: ['dirt', '#9a8a6a'] }, wall: ['stonewall', '#a89a84'], cap: ['grass', '#5a9a40'], wallH: 1.4, sky: ['#5aa8f0', '#f4ecd8'], light: 'day', tree: 'palm', water: '#2a8ac8', bgm: 'seaside', fog: ['#e0f0f8', 30, 90] },
   azurelle: { tiles: { main: ['temple', '#e4e0d4'], second: ['grass', '#5aa048'], third: ['dirt', '#6a7a8a'], cobble: ['cobble', '#d8d0c0'], wood: ['wood', '#a87a48'] }, wall: ['temple', '#c8ccd0'], roof: '#2a8a8a', houseWall: ['plaster', '#f4f0e8', '#4a7a8a'], sky: ['#58a0f0', '#f0f4f8'], light: 'day', water: '#2a8ad0', waterDeep: '#0a3a7a', bgm: 'azurelle', motes: '#e8f8ff', fog: ['#d8e8f4', 30, 80], rail: '#d8d8d0' },
   temple: { tiles: { main: ['temple', '#7a9aa8'], second: ['temple', '#5a7a88'], third: ['cave', '#2a3a48'], crystal: ['crystal', '#4ac8f0'] }, wall: ['temple', '#5a7080'], cap: ['temple', '#4a6070'], wallH: 3, sky: ['#04101a', '#0a2030'], light: 'deep', night: true, water: '#1a6a9a', waterDeep: '#04203a', bgm: 'dungeon2', motes: '#8ae8ff', fog: ['#061826', 12, 40], pillar: ['temple', '#8aa8b8'] },
   sky: { tiles: { main: ['temple', '#e8e4f4'], second: ['cloud', '#f4f0ff'], third: ['crystal', '#a88ae8'], grass: ['grass', '#8ac86a'] }, wall: ['temple', '#c8c0e0'], cap: ['temple', '#d8d0f0'], wallH: 2, sky: ['#3a5ad8', '#f8d8f0'], light: 'sky', water: '#6a8ae8', bgm: 'sky', motes: '#ffffff', fog: ['#e8d8f8', 30, 90], edgeDrop: -8, clouds: true, pillar: ['temple', '#f0ecf8'] },
@@ -76,7 +76,7 @@ export const MAPS = {};
   g.rect(1, 1, 3, 20, ',');
   g.h(8, 0, 32, 7, 2);
   g.rect(5, 0, 7, 22, '~');
-  g.rect(11, 8, 12, 8, '^').rect(27, 8, 28, 8, '^');
+  g.rect(11, 8, 12, 8, '^').rect(29, 8, 30, 8, '^'); // the east stairs sit clear of the inn so their foot is open
   g.rect(5, 12, 7, 12, '=').rect(5, 18, 7, 18, '=');
   g.rect(1, 21, 32, 22, 'w').rect(5, 21, 7, 22, '=');
   g.rect(1, 23, 32, 27, '~').rect(10, 23, 12, 26, 'w').rect(26, 23, 30, 26, 'w');
@@ -435,8 +435,9 @@ interior('workshop_in', '蕾娜的工房', ['anvil', 7, 7], {
   const g = new G(36, 30, '.');
   g.rect(0, 0, 35, 0, '#').rect(35, 0, 35, 29, '#').rect(0, 29, 35, 29, '~').rect(0, 0, 0, 29, '#');
   g.rect(0, 14, 0, 16, '.');
-  g.h(8, 1, 34, 7, 2); g.rect(20, 8, 22, 8, '^');
+  g.h(8, 1, 34, 7, 2); g.rect(22, 8, 24, 8, '^');
   g.rect(1, 9, 34, 10, '~'); g.rect(1, 9, 3, 10, '|').rect(12, 9, 13, 10, '|').rect(28, 9, 29, 10, '|');
+  g.rect(22, 9, 24, 10, '|'); // a bridge over the canal to the foot of the palace stairs
   g.rect(16, 11, 17, 28, '~'); g.rect(16, 15, 17, 15, '=').rect(16, 22, 17, 22, '=');
   g.rect(1, 11, 7, 28, '.'); g.rect(1, 24, 15, 28, ','); g.rect(18, 24, 34, 28, ',');
   g.rect(1, 25, 34, 28, '~'); g.rect(16, 24, 17, 24, '=');

@@ -1,6 +1,6 @@
 // Pixel art made in code: characters, monsters, tiles and props, all drawn on small canvases.
 import * as THREE from '../lib/three.module.min.js';
-import { hdCanvas, hdTexture, hdProp } from './hdtex.js?v=12';
+import { hdCanvas, hdTexture, hdProp } from './hdtex.js?v=13';
 
 let seed = 1234;
 export const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -307,7 +307,7 @@ export function personSheet(s) {
   return sheet(frames);
 }
 // battle sheet facing left: idle, idle2, ready, strike, cast, hurt, ko, guard, victory
-export const BPOSE = { idle: 0, idle2: 1, ready: 2, strike: 3, cast: 4, hurt: 5, ko: 6, guard: 7, win: 8, item: 9 };
+export const BPOSE = { idle: 0, idle2: 1, ready: 2, strike: 3, cast: 4, hurt: 5, ko: 6, guard: 7, win: 8, item: 9, weak: 10 };
 export function battleSheet(s) {
   const f = [
     personFrame(s, 'left', {}),

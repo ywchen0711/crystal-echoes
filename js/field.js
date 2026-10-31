@@ -1,11 +1,11 @@
 // Walking around: maps, the leader sprite, NPCs, chests, doors, encounters, mounts and the camera.
 import * as THREE from '../lib/three.module.min.js';
-import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js?v=12';
-import { parseMap, buildMap, groundAt } from './mapbuild.js?v=12';
-import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js?v=12';
-import { VoxelPerson, isPaper } from './voxel.js?v=12';
-import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js?v=12';
-import { HEROES, ECHOES } from './data.js?v=12';
+import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js?v=13';
+import { parseMap, buildMap, groundAt } from './mapbuild.js?v=13';
+import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js?v=13';
+import { VoxelPerson, isPaper } from './voxel.js?v=13';
+import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js?v=13';
+import { HEROES, ECHOES } from './data.js?v=13';
 
 export const LIGHTS = {
   day: { sun: ['#fff0d8', 2.7, [0.5, 1, 0.7]], hemi: ['#c4dcff', '#8a7a5a', 1.0], exp: 1.0 },
@@ -186,18 +186,28 @@ export class Field {
     if (c.shallow) return true;
     if (c.block && !(c.spot)) return true;
     const h = groundAt(this.map, x, z);
-    if (Math.abs(h - fromY) > 0.35) return true;
+    // a step up or down of more than a third of a unit is a ledge; on stairs the ground rises about one unit per
+    // tile, so the allowance grows with how far ahead this probe is (otherwise running up a staircase stalls)
+    const here = mover && this.map.at(Math.floor(mover.x), Math.floor(mover.z));
+    const slope = c.stairs || here?.stairs ? Math.hypot(x - mover.x, z - mover.z) * 1.15 : 0;
+    if (Math.abs(h - fromY) > 0.35 + slope) return true;
     for (const n of this.npcs) if (n !== mover && Math.hypot(n.x - x, n.z - z) < 0.55) return true;
     if (mover !== this.player && this.player && Math.hypot(this.player.x - x, this.player.z - z) < 0.6) return true;
     return false;
   }
   tryMove(w, dx, dz, r = 0.28) {
     const nx = w.x + dx, nz = w.z + dz;
-    const ok = (x, z) => !this.blocked(x + Math.sign(dx) * r, z, w.y, w) && !this.blocked(x, z + Math.sign(dz) * r, w.y, w) && !this.blocked(x + Math.sign(dx) * r, z + Math.sign(dz) * r, w.y, w);
+    const ok = (x, z, ex = dx, ez = dz) => !this.blocked(x + Math.sign(ex) * r, z, w.y, w) && !this.blocked(x, z + Math.sign(ez) * r, w.y, w) && !this.blocked(x + Math.sign(ex) * r, z + Math.sign(ez) * r, w.y, w);
     let moved = false;
     if (ok(nx, nz)) { w.x = nx; w.z = nz; moved = true; }
     else if (dx && ok(nx, w.z)) { w.x = nx; moved = true; }
     else if (dz && ok(w.x, nz)) { w.z = nz; moved = true; }
+    if (!moved && w === this.player && (dx || dz)) {
+      for (const [ang, k] of [[0.55, 0.8], [-0.55, 0.8], [1.1, 0.55], [-1.1, 0.55]]) {
+        const c = Math.cos(ang), sn = Math.sin(ang), rx = (dx * c - dz * sn) * k, rz = (dx * sn + dz * c) * k;
+        if (ok(w.x + rx, w.z + rz, rx, rz)) { w.x += rx; w.z += rz; moved = true; break; }
+      }
+    }
     if (moved && this.mount !== 'airship') w.y = groundAt(this.map, w.x, w.z);
     return moved;
   }

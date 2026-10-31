@@ -1,7 +1,7 @@
 // Voxel people and monsters: the same recipes as the pixel sprites, built as real 3D models
 // out of small cubes so they have depth, turn smoothly and swing their arms and legs.
 import * as THREE from '../lib/three.module.min.js';
-import { shade, mix } from './pixel.js?v=12';
+import { shade, mix } from './pixel.js?v=13';
 const CHAR_LAYER = 2;
 const toLayer = (root) => root.traverse((o) => o.layers.set(CHAR_LAYER));
 
@@ -97,6 +97,8 @@ function partsFor(s) {
   const leg = new VGrid();
   leg.fill(-2, 2, -LEG, -1, -2, 2, (x, y, z) => !(Math.abs(x) === 2 && Math.abs(z) === 2), (x, y, z) => y >= -LEG + 6 ? (y === -1 ? shade(L, -0.15) : y === -LEG + 9 && z === 2 ? shade(L, 0.12) : L) : null);
   leg.fill(-2, 2, -LEG, -LEG + 6, -2, 3, (x, y, z) => !(Math.abs(x) === 2 && (z === 3 || z === -2)) && !(y >= -LEG + 4 && z === 3), (x, y) => y === -LEG ? shade(B, -0.35) : y === -LEG + 6 ? shade(B, 0.18) : y === -LEG + 5 && s.top2 ? shade(B, -0.12) : B);
+  if (s.knee) leg.box(-2, 2, -LEG + 8, -LEG + 10, 3, 3, (x, y) => y === -LEG + 10 ? shade(s.knee, 0.2) : s.knee);
+  if (s.sabaton) leg.box(-2, 2, -LEG + 1, -LEG + 3, 4, 4, (x, y) => y === -LEG + 3 ? shade(s.sabaton, 0.2) : s.sabaton);
   P.leg = leg;
 
   // torso: hips to shoulders (local y 0..13)
@@ -131,12 +133,16 @@ function partsFor(s) {
       });
     }
   }
+  if (s.plate >= 2) { tor.box(-4, 4, 6, 11, 4, 4, (x, y) => s.plate >= 4 && (Math.abs(x) === 4 || y === 11) ? gold : y === 6 ? shade(T, -0.2) : shade(T, 0.15)); if (s.plate >= 6) tor.box(-1, 1, 8, 9, 5, 5, '#d84a4a'); }
+  if (s.straps) for (let y = 4; y <= 12; y++) { const x = Math.round((y - 8) * 0.75); tor.set(x, y, 4, s.straps); tor.set(x + 1, y, 4, s.straps); }
+  if (s.sash) tor.box(-1, 1, -9, 1, 4, 4, (x, y) => y <= -8 ? (s.trim || gold) : y % 3 === 0 ? shade(s.sash, -0.15) : s.sash);
   P.torso = tor;
 
   // arms: pivot at the shoulder; the hand is at local y -10
   const arm = new VGrid();
   arm.fill(-1, 1, -11, 0, -1, 1, (x, y, z) => !(y === 0 && Math.abs(x) === 1 && Math.abs(z) === 1) && !(y === -11 && Math.abs(x) === 1 && Math.abs(z) === 1), (x, y) => y <= -9 ? (s.gloves ? (y === -9 ? shade(s.gloves, 0.15) : s.gloves) : skin) : y === -8 ? (s.cuff || (s.gloves ? shade(s.gloves, -0.2) : shade(T, -0.25))) : y >= -1 ? shade(T, 0.08) : T);
   if (s.pauldron) arm.fill(-2, 2, -3, 1, -2, 2, (x, y, z) => !(y === 1 && (Math.abs(x) === 2 || Math.abs(z) === 2)), (x, y) => y === -3 ? shade(s.pauldron, -0.3) : y === 1 ? shade(s.pauldron, 0.25) : s.pauldron);
+  if (s.pauldron && s.pauldronSpike) for (const [x, z] of [[0, 0], [-1, 1], [1, -1]]) { arm.set(x, 2, z, shade(s.pauldron, 0.3)); if (x === 0) arm.set(x, 3, z, '#f4f0e0'); }
   P.arm = arm;
 
   // head: local y 0..14, face toward +z
@@ -250,15 +256,28 @@ function partsFor(s) {
   }
 
   // weapon in the right hand (hand-local coordinates)
-  const wp = s.weapon && tintWeapon(weaponGrid(s.weapon), s.weaponMetal, s.weaponAccent);
+  const wp = s.weapon && tintWeapon(weaponGrid(s.weapon, s.weaponTier, s.weaponRefine), s.weaponMetal, s.weaponAccent);
   if (wp) P.weapon = wp;
-  if (s.weaponL) { const wl = tintWeapon(weaponGrid(s.weaponL), s.weaponLMetal, s.weaponLAccent); if (wl) P.weaponL = wl; }
+  if (s.weaponL) { const wl = tintWeapon(weaponGrid(s.weaponL, s.weaponLTier, s.weaponLRefine), s.weaponLMetal, s.weaponLAccent); if (wl) P.weaponL = wl; }
   if (s.shield) {
-    const sh = new VGrid(), S = s.shieldColor || '#5a7ac8';
-    sh.fill(2, 3, -11, 4, -6, 6, (x, y, z) => (y + 3.5) ** 2 / 64 + z * z / 40 <= 1 && (x === 2 || (y + 3.5) ** 2 / 64 + z * z / 40 <= 0.62), (x, y, z) => (y + 3.5) ** 2 / 64 + z * z / 40 > 0.7 ? gold : x === 3 ? shade(S, 0.12) : S);
-    sh.box(4, 4, -4, -3, -1, 0, s.shieldEmblem || gold);
-    if (s.shieldEmblem) sh.box(3, 3, -6, -1, -1, 0, shade(s.shieldEmblem, -0.1));
-    if (s.shieldRim) for (const [k, v] of sh.m) if (v[3] === gold) v[3] = s.shieldRim;
+    // shield-local: x is the thickness (2 = front face), y up and down, z across; held on the forearm
+    const sh = new VGrid(), S = s.shieldColor || '#5a7ac8', rim = s.shieldRim || gold, kind = s.shieldKind || 'kite', st = s.shieldTier || 0;
+    const shape = kind === 'buckler' ? (y, z) => ((y + 3) ** 2 + z * z) / 22
+      : kind === 'tower' ? (y, z) => Math.max(Math.abs(y + 4) / 9.5, Math.abs(z) / 6.2) ** 6
+      : kind === 'aegis' ? (y, z) => ((y + 3.5) ** 2 / 52 + z * z / 52) * (1 - 0.08 * Math.cos(Math.atan2(z, y + 3.5) * 6))
+      : (y, z) => (y + 3.5) ** 2 / 64 + (z * z) / (40 * Math.max(0.15, Math.min(1, (y + 12) / 10)));
+    sh.fill(2, 3, -14, 6, -8, 8, (x, y, z) => { const v = shape(y, z); return v <= 1 && (x === 2 || v <= 0.62); }, (x, y, z) => {
+      const v = shape(y, z);
+      if (v > (kind === 'tower' ? 0.72 : 0.7)) return rim;
+      if (kind === 'tower' && st >= 2 && Math.abs(z) <= 1) return shade(S, -0.18);
+      if (kind === 'kite' && st >= 3 && (y === -3 || z === 0)) return shade(S, -0.15);
+      return x === 3 ? shade(S, 0.12) : S;
+    });
+    if (kind === 'buckler') { sh.box(4, 4, -4, -2, -1, 1, rim); sh.set(5, -3, 0, s.shieldEmblem || rim); } // a boss in the middle
+    else if (kind === 'aegis') { sh.box(4, 4, -5, -2, -1, 1, '#8ae0ff'); sh.box(4, 4, -4, -3, -2, 2, '#8ae0ff'); sh.set(5, -4, 0, '#ffffff'); }
+    else { sh.box(4, 4, -4, -3, -1, 0, s.shieldEmblem || gold); if (s.shieldEmblem) sh.box(3, 3, -6, -1, -1, 0, shade(s.shieldEmblem, -0.1)); }
+    if (st >= 4 && kind !== 'buckler') for (const [y, z] of [[1, -4], [1, 4], [-8, -3], [-8, 3]]) if (sh.has(3, y, z) || sh.has(2, y, z)) sh.set(4, y, z, rim); // studs
+    if (st >= 6) { sh.set(4, -3, kind === 'aegis' ? 3 : 0, '#d84a4a'); if (kind === 'tower' || kind === 'kite') for (let y = -10; y <= 2; y += 4) sh.set(4, y, 0, rim); }
     P.shield = sh;
   }
   return P;
@@ -272,67 +291,194 @@ function tintWeapon(g, metal, accent) {
   for (const v of g.m.values()) if (map[v[3]]) v[3] = map[v[3]];
   return g;
 }
-export function weaponMesh(kind, metal, accent) { const g = tintWeapon(weaponGrid(kind), metal, accent); if (!g) return null; const m = new THREE.Mesh(meshGrid(g, 0.01), voxelMaterial(0.12)); return m; }
-function weaponGrid(kind) {
-  const g = new VGrid();
-  const steel = '#cdd5e0', steelD = '#7d8aa0', wood = '#8a5a2a', woodL = '#b88848', gold = '#e8c050';
+export function weaponMesh(kind, metal, accent, tier = 0, refine = 0) { const g = tintWeapon(weaponGrid(kind, tier, refine), metal, accent); if (!g) return null; const m = new THREE.Mesh(meshGrid(g, 0.01), voxelMaterial(0.12)); return m; }
+// Every weapon type has its own shape at each of the eight tiers (bronze to star-forged), so a new
+// weapon always looks new in the hand. Hand-local coordinates: x is the thin axis, y the width,
+// +z runs from the grip toward the business end. Steel tones are re-tinted to the tier's metal,
+// and the white edge, red gem and blue crystal take the item's accent colour.
+function weaponGrid(kind, tier = 0, refine = 0) {
+  const g = new VGrid(), t = Math.max(0, Math.min(7, tier | 0));
+  const steel = '#cdd5e0', steelD = '#7d8aa0', steelL = '#dfe6f0', edge = '#e6ebf2', gem = '#d84a4a', cry = '#8ae0ff', white = '#ffffff';
+  const wood = '#8a5a2a', woodL = '#b88848', woodD = '#5a3a1e', gold = '#e8c050', goldD = '#b8902a', lea = '#5a3a2a', leaD = '#3a2418';
+  const S = (x, y, z, c) => g.set(x, y, z, c);
+  const grip = (len, a = lea, b = leaD) => { for (let z = -len; z <= 0; z++) S(0, 0, z, z % 2 ? a : b); };
+  const pommel = (z, gemmed) => { S(0, 0, z, gold); if (gemmed) { S(0, 0, z - 1, gem); S(1, 0, z, gem); S(-1, 0, z, gem); } };
+  const guard = (style, w, z = 1, gemmed = false) => {
+    g.box(0, 0, -w, w, z, z, gold);
+    if (style === 'cup') { S(0, -w, z + 1, gold); S(0, w, z + 1, gold); }
+    if (style === 'droop') { S(0, -w, z - 1, gold); S(0, w, z - 1, gold); }
+    if (style === 'cross') g.box(-1, 1, -1, 1, z, z, gold);
+    if (style === 'wing') for (let i = 1; i <= 2; i++) { S(0, -w - i, z + i, gold); S(0, w + i, z + i, gold); S(0, -w - i + 1, z + i, goldD); S(0, w + i - 1, z + i, goldD); }
+    if (style === 'star') { g.box(0, 0, -1, 1, z - 1, z + 1, gold); for (const s of [-1, 1]) { S(0, s * (w + 1), z + 1, white); S(0, s * (w + 1), z - 1, white); } }
+    if (gemmed) { S(1, 0, z, gem); S(-1, 0, z, gem); }
+  };
+  // a blade from z0, len long; half(r) gives [low, high] y at the fraction r along it
+  const blade = (z0, len, half, o = {}) => {
+    for (let i = 0; i < len; i++) {
+      const r = len > 1 ? i / (len - 1) : 0, z = z0 + i, [lo, hi] = half(r), off = o.wave ? Math.round(Math.sin(r * Math.PI * o.wave) * 0.9) : 0;
+      for (let y = lo; y <= hi; y++) {
+        let c = o.cry ? (y === hi ? white : (y + z) % 3 ? cry : white) : y === hi ? edge : y === lo && hi - lo >= 2 ? steelD : steel;
+        if (o.fuller && y === Math.round((lo + hi) / 2) && r > 0.05 && r < 0.75 && hi - lo >= 2) c = o.cry ? white : steelD;
+        if (o.runes && y === Math.round((lo + hi) / 2) && i % 3 === 1 && r < 0.8) c = gold;
+        S(0, y + off, z, c);
+      }
+      if (o.thick && hi - lo >= 2) for (let y = lo + 1; y < hi; y++) { S(1, y + off, z, o.cry ? cry : steelD); S(-1, y + off, z, o.cry ? cry : steelD); }
+    }
+  };
+  const taper = (w, at = 0.82) => (r) => r < at ? [-w, w] : r < 0.94 ? [-Math.max(0, w - 1), Math.max(0, w - 1)] : [0, 0];
+  const orb = (cy, rad, col, hi = white) => g.fill(-3, 3, Math.floor(cy - rad - 1), Math.ceil(cy + rad + 1), -4, 4, (x, y, z) => x * x + (y - cy) ** 2 + z * z <= rad * rad + 0.5, (x, y, z) => (z < -rad * 0.3 && y > cy) ? hi : col);
+
   if (kind === 'sword') {
-    g.box(0, 0, 0, 0, -4, 0, '#5a3a2a'); g.box(0, 0, 0, 0, -5, -5, gold);
-    g.box(0, 0, -2, 2, 1, 1, gold); g.box(0, 0, 0, 0, 1, 1, '#d84a4a');
-    g.box(0, 0, -1, 1, 2, 16, (x, y) => y === 1 ? '#e6ebf2' : y === 0 ? steel : steelD); g.set(0, 0, 17, steel);
-  } else if (kind === 'katana') {
-    g.box(0, 0, 0, 0, -6, 0, (x, y, z) => z % 2 ? '#2a2a3a' : '#e8e4d8');
-    g.box(-1, 1, -1, 1, 1, 1, gold);
-    for (let z = 2; z <= 22; z++) { const off = Math.round(((z - 2) / 20) ** 2 * 2); g.set(0, off, z, '#f4f6fa'); g.set(0, off - 1, z, steelD); }
+    const len = [11, 13, 14, 15, 16, 17, 18, 20][t], gs = ['bar', 'bar', 'cup', 'cross', 'wing', 'droop', 'wing', 'star'][t], gw = [2, 2, 2, 3, 3, 3, 4, 3][t];
+    grip([3, 4, 4, 4, 4, 5, 5, 5][t]); pommel(-[3, 4, 4, 4, 4, 5, 5, 5][t] - 1, t >= 3); guard(gs, gw, 1, t >= 6);
+    const half = t === 0 ? (r) => r < 0.9 ? [0, 1] : [0, 0]
+      : t === 4 ? (r) => { const w = r < 0.6 ? 1 + Math.round(r * 1.7) : r < 0.9 ? 2 - Math.round((r - 0.6) * 5) : 0; return [-w, w]; }
+      : t === 7 ? (r) => { const w = Math.round(2.4 * Math.sin(Math.PI * Math.min(1, r * 1.05))); return [-w, w]; }
+      : t === 6 ? taper(2) : taper(1);
+    blade(2, len, half, { fuller: t === 2 || t === 3 || t === 5, wave: t === 5 ? 6 : 0, runes: t === 6, cry: t === 7, thick: t >= 6 });
+  } else if (kind === 'greatsword') {
+    const len = [18, 20, 21, 22, 23, 24, 26, 28][t], gw = [3, 3, 4, 4, 4, 5, 5, 5][t];
+    grip([6, 6, 6, 7, 7, 7, 7, 7][t], t >= 5 ? '#6a2a2a' : lea); pommel(-[6, 6, 6, 7, 7, 7, 7, 7][t] - 1, t >= 4);
+    guard(t >= 6 ? 'wing' : t >= 3 ? 'cup' : 'bar', gw, 1, t >= 6); if (t >= 2) g.box(-1, 1, -1, 1, 1, 1, gold);
+    const ric = t >= 2 ? 3 : 0;
+    if (ric) g.box(0, 0, -1, 1, 2, 1 + ric, steelD);
+    blade(2 + ric, len - ric, t === 7 ? (r) => { const w = r < 0.85 ? 3 : r < 0.95 ? 2 : 0; return [-w, w]; } : taper(t >= 4 ? 3 : 2, 0.86), { fuller: t >= 1 && t < 7, runes: t === 6, cry: t === 7, thick: true });
+    if (t >= 4 && t < 7) for (let z = 4 + ric; z < len - 4; z += 3) S(0, -(t >= 4 ? 4 : 3), z, steelD); // serrated back
+    if (t === 5) for (let z = 6; z < len - 2; z += 4) S(0, 4, z, gem);
   } else if (kind === 'dagger') {
-    g.box(0, 0, 0, 0, -3, 0, '#3a2a20'); g.box(0, 0, -1, 1, 1, 1, gold); g.box(0, 0, -1, 0, 2, 8, (x, y) => y === 0 ? '#ffffff' : steelD);
-  } else if (kind === 'staff' || kind === 'rod') {
-    const tip = kind === 'staff' ? '#ff9a4a' : '#8ae0ff', top = kind === 'staff' ? 20 : 12, bot = kind === 'staff' ? -12 : -5;
-    g.box(0, 0, bot, top, 0, 0, (x, y) => y % 5 === 0 ? woodL : wood);
-    g.box(-1, 1, top - 1, top, -1, 1, gold);
-    g.fill(-3, 3, top + 1, top + 7, -3, 3, (x, y, z) => x * x + (y - top - 4) ** 2 + z * z <= 7.5, (x, y, z) => y >= top + 6 || (x < 0 && y > top + 4) ? '#ffffff' : tip);
-    if (kind === 'staff') for (const [x, z] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) g.box(x, x, top + 1, top + 3, z, z, gold);
+    const len = [6, 7, 8, 8, 9, 9, 10, 11][t];
+    grip(3, t >= 4 ? '#2a2a3a' : '#3a2a20', t >= 4 ? gold : leaD); pommel(-4, t >= 5);
+    guard(t >= 5 ? 'droop' : t >= 2 ? 'cup' : 'bar', t >= 3 ? 2 : 1, 1, t >= 6);
+    if (t === 4) { blade(2, len, (r) => r < 0.9 ? [-2, -1] : [-1, -1]); blade(2, len - 1, (r) => r < 0.9 ? [1, 2] : [1, 1]); } // twin-pronged
+    else blade(2, len, t === 7 ? (r) => { const w = Math.round(1.6 * Math.sin(Math.PI * Math.min(1, r * 1.1))); return [-w, w]; } : t >= 5 ? taper(1, 0.7) : (r) => r < 0.85 ? [-1, 0] : [0, 0], { wave: t === 2 || t === 6 ? 4 : 0, cry: t === 7 });
+  } else if (kind === 'katana') {
+    const len = [16, 17, 18, 19, 20, 21, 22, 24][t];
+    const wrap = [['#e8e4d8', '#2a2a3a'], ['#2a2a3a', '#5a3a2a'], ['#c83a3a', '#2a2a3a'], ['#e8e4d8', '#3a4a8a'], ['#2a2a3a', gold], ['#6a2a8a', '#e8e4d8'], ['#e8e4d8', gold], ['#2a2a3a', cry]][t];
+    for (let z = -7; z <= 0; z++) S(0, 0, z, z % 2 ? wrap[0] : wrap[1]); S(0, 0, -8, gold);
+    const ts = t >= 6 ? 2 : t >= 2 ? 1 : 1; g.fill(-ts, ts, -ts - (t >= 4 ? 1 : 0), ts + (t >= 4 ? 1 : 0), 1, 1, (x, y) => t >= 4 ? x * x + y * y <= ts * ts + 2 : true, t >= 3 ? gold : '#3a3a44');
+    S(0, 0, 2, gold);
+    for (let z = 3; z < 3 + len; z++) { const r = (z - 3) / len, off = Math.round(r * r * (t >= 5 ? 3 : 2)); S(0, off, z, t === 7 ? white : '#f4f6fa'); S(0, off - 1, z, t === 7 ? cry : t >= 4 && z % 2 ? steelL : steelD); if (t >= 3 && r < 0.9) S(0, off - 2, z, t === 7 ? cry : steelD); }
+    if (t >= 6) { S(0, -1, -8, gem); S(0, -2, -9, gem); S(0, -2, -10, gem); } // a tassel on the pommel
   } else if (kind === 'spear') {
-    g.box(0, 0, -14, 24, 0, 0, (x, y) => y % 6 === 0 ? woodL : wood);
-    g.box(-1, 1, 24, 25, -1, 1, gold);
-    for (let y = 26; y <= 32; y++) { const r = y < 29 ? y - 25 : 33 - y; g.box(0, 0, y, y, -Math.min(2, r - 1), Math.min(2, r - 1), y > 30 ? '#ffffff' : steel); }
-    g.box(0, 0, 21, 23, 1, 1, '#d84a4a');
+    const top = [22, 24, 24, 25, 26, 26, 27, 28][t];
+    g.box(0, 0, -12, top, 0, 0, (x, y, z) => t >= 5 && z % 6 === 0 ? gold : z % 6 === 0 ? woodL : t >= 3 ? woodD : wood);
+    g.box(-1, 1, top, top + 1, -1, 1, gold);
+    const h0 = top + 2, P = (w, h, c) => S(0, h, w, c);
+    const head = [[5, 1], [7, 2], [7, 2], [10, 1], [8, 2], [7, 1], [9, 2], [10, 2]][t];
+    for (let i = 0; i < head[0]; i++) { const r = i / (head[0] - 1), w = r < 0.5 ? Math.min(head[1], Math.round(r * 2 * head[1] + 0.4)) : Math.max(0, Math.round((1 - r) * 2 * head[1])); for (let k = -w; k <= w; k++) P(k, h0 + i, t === 7 ? ((i + k) % 3 ? cry : white) : Math.abs(k) === w ? edge : k === 0 && w > 1 ? steelD : steel); }
+    if (t === 2 || t === 6) for (const s2 of [-1, 1]) { P(s2 * 2, h0, steel); P(s2 * 3, h0 - 1, steel); } // winged lugs
+    if (t === 4) for (let h = h0 - 1; h <= h0 + 4; h++) { const ext = Math.round(4 - Math.abs(h - h0 - 1.5) * 0.6); for (let w = 2; w <= ext; w++) P(w, h, w === ext ? edge : steel); } // halberd blade
+    if (t === 5) for (const s2 of [-2, 2]) for (let h = h0; h <= h0 + 5; h++) P(s2, h, h === h0 + 5 ? edge : steel); // trident prongs
+    if (t >= 3) for (let h = top - 3; h <= top - 1; h++) P(1, h, gem); // a red tassel
+  } else if (kind === 'axe') {
+    const top = [12, 13, 14, 15, 15, 16, 17, 17][t];
+    g.box(0, 0, 0, 0, -3, top, (x, y, z) => z % 4 === 0 ? (t >= 5 ? gold : woodL) : t >= 4 ? woodD : wood);
+    const bit = (dir, h, reach, beard) => g.fill(0, 0, dir < 0 ? -reach - 1 : 1, dir < 0 ? -1 : reach + 1, top - h - beard, top + 1, (x, y, z) => { const d = Math.abs(y); const lo = top - h + (d - 1) * -beard / reach; return d <= reach && z >= Math.min(top - h, lo) && z <= top + 1 - (d > reach - 1 ? 0 : 0) && z >= top - h - (d / reach) * beard; },
+      (x, y, z) => Math.abs(y) === reach ? (t === 7 ? white : edge) : t === 7 ? cry : Math.abs(y) === 1 ? steelD : steel);
+    const [h, reach, beard] = [[3, 3, 0], [4, 4, 0], [3, 4, 3], [4, 4, 0], [5, 5, 2], [5, 5, 2], [5, 5, 1], [5, 5, 2]][t];
+    bit(-1, h, reach, beard); if (t === 3 || t >= 5) bit(1, h, t === 3 ? reach : reach - 1, beard);
+    if (t >= 6) g.box(0, 0, 0, 0, top + 2, top + 4, t === 7 ? cry : steelL);
+    if (t >= 4) S(1, 0, top - 1, gem);
+  } else if (kind === 'hammer') {
+    const top = [11, 12, 12, 13, 14, 14, 15, 15][t];
+    g.box(0, 0, 0, 0, -3, top, (x, y, z) => z % 4 === 0 ? (t >= 5 ? gold : woodL) : wood);
+    const [hx, hy, hz] = [[1, 2, 3], [2, 3, 4], [2, 3, 4], [2, 3, 5], [2, 4, 5], [2, 4, 5], [3, 4, 6], [3, 4, 6]][t];
+    const c0 = top + 1;
+    if (t === 4 || t === 7) g.fill(-hx - 1, hx + 1, -hy - 1, hy + 1, c0, c0 + hz, (x, y, z) => x * x / ((hx + 1) ** 2) + y * y / ((hy + 1) ** 2) + ((z - c0 - hz / 2) ** 2) / ((hz / 2 + 0.6) ** 2) <= 1, (x, y, z) => t === 7 ? ((x + y + z) % 3 ? cry : white) : z === c0 + hz ? steelL : steel);
+    else g.box(-hx, hx, -hy, hy, c0, c0 + hz, (x, y, z) => t === 0 ? ((y + z) % 3 ? woodL : wood) : Math.abs(y) === hy ? steelD : z === c0 + hz ? steelL : steel);
+    if (t === 2 || t >= 5) for (let i = 1; i <= 3; i++) S(0, -hy - i, c0 + Math.round(hz / 2), i === 3 ? edge : steelD); // a spike on the back
+    if (t >= 3) g.box(-hx, hx, -hy, hy, c0 + Math.round(hz / 2), c0 + Math.round(hz / 2), (x, y) => Math.abs(y) === hy || Math.abs(x) === hx ? gold : null);
+    if (t >= 6) { S(hx + 1, 0, c0 + Math.round(hz / 2), gem); S(-hx - 1, 0, c0 + Math.round(hz / 2), gem); }
   } else if (kind === 'bow') {
-    for (let y = -12; y <= 12; y++) { const z = Math.round(4 * (1 - (y / 12) ** 2)); g.set(0, y, z, Math.abs(y) < 3 ? '#5a3a2a' : wood); if (Math.abs(y) < 11) g.set(0, y, z + 1, woodL); }
-    g.box(0, 0, -11, 11, 0, 0, (x, y) => '#eeeeee');
+    const L = [10, 11, 12, 12, 14, 13, 13, 14][t], bend = [4, 4, 3, 4, 3, 4, 4, 4][t];
+    for (let y = -L; y <= L; y++) {
+      const r = y / L; let z = Math.round(bend * (1 - r * r));
+      if (t === 2 || t >= 5) z -= Math.round(Math.max(0, Math.abs(r) - 0.8) * 10); // recurve tips
+      const c = Math.abs(y) < 3 ? (t >= 3 ? gold : lea) : t === 7 ? ((y & 1) ? cry : white) : t >= 6 ? (Math.abs(y) > L - 3 ? gold : woodD) : t >= 4 ? woodD : wood;
+      S(0, y, z, c); if (Math.abs(y) < L - 1) S(0, y, z + 1, t === 7 ? cry : t >= 4 ? wood : woodL);
+    }
+    g.box(0, 0, -L + 1, L - 1, 0, 0, () => t >= 6 ? '#fff4c0' : '#eeeeee');
+    if (t === 5 || t === 6) for (const s of [-1, 1]) for (let i = 0; i < 4; i++) S(0, s * (4 + i), bend + 1 + Math.round(i * 0.4), i === 3 ? white : steelL); // wing ornaments
+    if (t >= 3) S(1, 0, bend + 1, gem);
+  } else if (kind === 'gun') {
+    const blen = [12, 14, 14, 12, 15, 18, 16, 17][t];
+    g.box(0, 0, -3, 0, -3, 0, t >= 6 ? woodD : lea); g.box(0, 0, -3, -2, -5, -4, t >= 6 ? woodD : lea);
+    g.box(0, 0, 0, 1, 0, blen, (x, y, z) => t === 7 ? (y ? cry : white) : y === 1 ? steelD : '#3a3a44');
+    if (t === 4) g.box(1, 1, 0, 1, 0, blen, (x, y) => y ? steelD : '#3a3a44'); // a second barrel
+    if (t === 3) g.box(-1, 1, -1, 2, blen - 1, blen, '#3a3a44'); // a flared muzzle
+    if (t === 5) g.box(0, 0, 2, 3, 5, 9, (x, y, z) => z === 5 || z === 9 ? gem : steelD); // a sight
+    g.box(0, 0, -1, -1, 2, 4, '#3a3a44'); S(0, 2, blen - 1, gold);
+    if (t >= 2) for (let z = 3; z < blen; z += 5) g.box(0, 0, -1, 1, z, z, gold);
+    if (t >= 6) S(1, 0, 1, gem);
+  } else if (kind === 'staff' || kind === 'rod') {
+    const isS = kind === 'staff', top = isS ? [18, 19, 20, 20, 21, 21, 22, 22][t] : [10, 11, 12, 12, 13, 13, 14, 14][t], bot = isS ? -12 : -5;
+    const tip = isS ? '#ff9a4a' : cry;
+    g.box(0, 0, bot, top, 0, 0, (x, y, z) => z % 5 === 0 ? (t >= 4 ? gold : woodL) : t === 7 ? '#5a4a8a' : t >= 5 ? woodD : wood);
+    g.box(-1, 1, top - 1, top, -1, 1, gold);
+    const f = t, P = (w, h, c) => S(0, h, w, c);
+    if (f === 0) orb(top + 2, 1.6, isS ? woodL : tip);
+    else if (f === 1) { if (isS) for (let i = 0; i <= 6; i++) P(Math.round(Math.sin(i / 6 * Math.PI) * 3), top + 1 + Math.round(Math.sin(i / 6 * Math.PI * 0.9) * 2 + i * 0.4), woodL); else orb(top + 2, 1.8, tip); }
+    else if (f === 2) orb(top + 4, 2.7, tip);
+    else if (f === 3) { for (let a = 0; a < 20; a++) { const ang = a / 20 * Math.PI * 2; P(Math.round(Math.cos(ang) * 4), Math.round(top + 5 + Math.sin(ang) * 4), gold); } orb(top + 5, 1.8, tip); }
+    else if (f === 4) { orb(top + 4, 2.4, tip); for (const s of [-1, 1]) for (let i = 0; i < 5; i++) for (let k = 0; k <= Math.min(i, 2); k++) P(s * (3 + i), top + 2 + i - k, i === 4 ? white : '#f4f0e0'); }
+    else if (f === 5) { for (let a = 0; a <= 14; a++) { const ang = Math.PI * (0.15 + a / 14 * 1.7); P(Math.round(Math.cos(ang) * 4), Math.round(top + 5 + Math.sin(ang) * 4), a % 4 ? gold : white); } orb(top + 5, 1.5, tip); }
+    else if (f === 6) { for (const [y, h] of [[0, 7], [-2, 4], [2, 5], [-1, 3], [1, 3]]) for (let z = 0; z < h; z++) P(y, top + 1 + z, z === h - 1 ? white : cry); S(1, top + 3, 0, cry); S(-1, top + 3, 0, cry); }
+    else { orb(top + 5, 2.2, white, cry); for (let a = 0; a < 5; a++) { const ang = a / 5 * Math.PI * 2 - Math.PI / 2; for (let k = 3; k <= 5; k++) P(Math.round(Math.cos(ang) * k), Math.round(top + 5 + Math.sin(ang) * k), k === 5 ? white : gold); } }
+    if (isS && f >= 2 && f !== 6) for (const [x, y] of [[-2, 0], [2, 0], [0, -2], [0, 2]].slice(0, f >= 5 ? 4 : 2)) g.box(x, x, top + 1, top + 2, y, y, gold); // prongs that hold the orb (y here is the width axis)
+  } else if (kind === 'knuckle') {
+    // worn over the fist: the hand is at the origin
+    const base = [['#f0ead8', '#d8d0bc'], [lea, leaD], [steel, steelD], [steel, steelD], [steel, steelD], [gold, goldD], ['#5a3a6a', '#3a2a4a'], [cry, white]][t];
+    g.fill(-2, 2, -2, 2, -2, 2, (x, y, z) => !(Math.abs(x) === 2 && Math.abs(y) === 2) && !(Math.abs(y) === 2 && Math.abs(z) === 2), (x, y, z) => (z + y) % 2 ? base[0] : base[1]);
+    if (t >= 2) for (let y = -1; y <= 1; y += 2) S(0, y, 3, t >= 5 ? gold : steelL); // studs over the knuckles
+    if (t === 3 || t >= 6) for (const y of [-2, 0, 2]) { S(0, y, 3, edge); S(0, y, 4, edge); }
+    if (t === 4) for (const y of [-2, 0, 2]) for (let z = 3; z <= 8; z++) S(0, y, z, z === 8 ? white : edge); // claws
+    if (t >= 5) S(3, 0, 0, gem);
+  } else if (kind === 'whip') {
+    const n = [16, 18, 22, 22, 24, 24, 26, 26][t];
+    g.box(0, 0, -1, 2, 0, 0, t >= 6 ? gold : '#5a3a2a'); if (t >= 6) S(0, 3, 0, gem);
+    for (let i = 0; i < n; i++) {
+      const a = i * 0.45, x = Math.round(Math.sin(a) * 2), y = -2 - Math.round(i * 0.55), z = Math.round(Math.cos(a) * 2 + 2);
+      const c = t === 7 ? (i % 2 ? cry : white) : t === 4 ? (i % 2 ? steel : steelD) : t >= 2 ? (i % 3 ? '#8a5a3a' : '#5a3a2a') : i % 2 ? '#c8b890' : '#a89870';
+      S(x, y, z, c);
+      if (t === 5 && i % 3 === 1) S(x, y, z + 1, edge); // thorns
+    }
+    if (t === 3 || t >= 5) { const a = (n - 1) * 0.45; S(Math.round(Math.sin(a) * 2), -3 - Math.round((n - 1) * 0.55), Math.round(Math.cos(a) * 2 + 2), edge); }
+  } else if (kind === 'boomerang') {
+    const arm = [5, 7, 7, 6, 6, 7, 7, 7][t], c1 = t === 7 ? cry : t >= 6 ? gold : t >= 2 ? steel : wood, c2 = t === 7 ? white : t >= 2 ? edge : woodL, mark = t >= 6 ? gem : '#d84a4a';
+    const wing = (ang) => { for (let i = 0; i <= arm; i++) { const y = Math.round(Math.cos(ang) * i), z = Math.round(Math.sin(ang) * i) + 6; S(0, y, z, i % 3 === 2 ? mark : c1); S(0, y + Math.round(Math.sin(ang)), z - Math.round(Math.cos(ang)), c2); } };
+    const angs = t >= 4 && t !== 5 ? [0, Math.PI / 2, Math.PI, Math.PI * 1.5] : t === 3 ? [Math.PI / 2, Math.PI * 7 / 6, Math.PI * 11 / 6] : [Math.PI * 0.2, Math.PI * 0.8];
+    for (const a of angs) wing(a);
+    if (t === 5) for (let a = 0; a <= 12; a++) { const ang = Math.PI * (0.1 + a / 12 * 0.8); S(0, Math.round(Math.cos(ang) * 7), Math.round(Math.sin(ang) * 7) + 3, edge); }
+    S(0, 0, 6, t >= 4 ? gem : c1);
+  } else if (kind === 'harp') {
+    const hgt = [8, 10, 11, 11, 12, 12, 13, 13][t], wid = [5, 7, 7, 8, 8, 9, 9, 9][t], fr = t === 7 ? cry : t >= 3 ? gold : woodL;
+    for (let y = -2; y <= hgt; y++) S(0, y, 0, fr);
+    for (let z = 0; z <= wid; z++) { S(0, hgt - Math.round(z * 0.3), z, fr); S(0, -2, z, t >= 3 ? goldD : wood); }
+    g.box(0, 0, -2, hgt - 2, wid, wid, fr);
+    for (let z = 2; z <= wid - 1; z += (t >= 5 ? 1 : 2)) g.box(0, 0, -1, hgt - 1 - Math.round(z * 0.3), z, z, t >= 6 ? '#fff4c0' : white);
+    if (t >= 4) for (let i = 0; i < 4; i++) for (let k = 0; k <= i; k++) S(0, hgt + 1 + i - k, -1 - i, i === 3 ? white : '#f4f0e0'); // a wing on top
+    if (t >= 2) S(1, hgt, 0, gem);
+  } else if (kind === 'tome') {
+    const cover = ['#8a6a4a', '#6a2a3a', '#2a4a6a', '#2a5a3a', '#4a2a6a', '#6a1a1a', '#1a1a2a', '#3a6a8a'][t], hh = t >= 4 ? 2 : 1;
+    g.box(-3, 3, -2, 5, -hh, hh, (x, y, z) => Math.abs(z) === hh ? cover : (y & 1) ? '#f4ecd8' : '#e4dcc8');
+    if (t >= 2) g.box(-1, 1, 1, 3, hh + 1, hh + 1, gold);
+    if (t >= 3) S(0, 2, hh + 2, gem);
+    if (t >= 4) for (const [x, y] of [[-3, -2], [3, -2], [-3, 5], [3, 5]]) g.box(x, x, y, y, -hh, hh, gold); // metal corners
+    if (t >= 5) g.box(-2, 2, 6, 6, -hh, hh, '#5a3a2a'); // a clasp strap
+    if (t === 7) for (const [x, y, z] of [[-4, 7, 3], [3, 8, 4], [0, 9, 2]]) S(x, y, z, white); // pages floating free
   } else if (kind === 'wrench') {
     g.box(0, 0, -1, 0, -2, 11, (x, y, z) => z < 2 ? '#c84a3a' : steelD);
-    g.box(-1, 1, -2, 1, 12, 15, steel); g.box(-1, 1, -1, 0, 14, 15, null);
+    g.box(-1, 1, -2, 1, 12, 15, steel);
     for (let y = -1; y <= 0; y++) for (let z = 14; z <= 15; z++) for (let x = -1; x <= 1; x++) g.del(x, y, z);
-  } else if (kind === 'harp') {
-    for (let y = -2; y <= 10; y++) { g.set(0, y, 0, gold); }
-    for (let z = 0; z <= 7; z++) { g.set(0, 10 - Math.round(z * 0.3), z, gold); g.set(0, -2, z, shade(gold, -0.2)); }
-    g.box(0, 0, -2, 8, 7, 7, gold);
-    for (let z = 2; z <= 6; z += 2) g.box(0, 0, -1, 8, z, z, '#ffffff');
-  } else if (kind === 'greatsword') {
-    g.box(0, 0, 0, 0, -6, 0, '#4a2a1a'); g.box(-3, 3, -1, 1, 1, 1, gold);
-    g.box(0, 0, -2, 2, 2, 24, (x, y) => Math.abs(y) === 2 ? steelD : y === 0 ? '#e6ebf2' : steel); g.box(0, 0, -1, 1, 25, 26, steel);
-  } else if (kind === 'axe') {
-    g.box(0, 0, 0, 0, -3, 13, (x, y, z) => z % 4 === 0 ? woodL : wood);
-    g.fill(0, 0, -6, 4, 9, 15, (x, y, z) => y >= -5 + Math.abs(z - 12) * 0.6 && y <= 1 + Math.abs(z - 12) * 0.3 && y < 4, (x, y) => y <= -5 ? '#ffffff' : steel);
-  } else if (kind === 'hammer') {
-    g.box(0, 0, 0, 0, -3, 12, (x, y, z) => z % 4 === 0 ? woodL : wood);
-    g.box(-2, 2, -3, 3, 12, 16, (x, y, z) => z === 12 || z === 16 ? steelD : steel); g.box(-1, 1, -2, 2, 11, 11, gold);
-  } else if (kind === 'gun') {
-    g.box(0, 0, -2, 0, -3, 0, '#5a3a2a'); g.box(0, 0, 0, 1, 0, 14, (x, y, z) => y === 1 ? steelD : '#3a3a44'); g.box(0, 0, -1, -1, 2, 4, '#3a3a44'); g.set(0, 2, 13, gold);
-  } else if (kind === 'whip') {
-    g.box(0, 0, -1, 1, 0, 0, '#5a3a2a');
-    for (let i = 0; i < 22; i++) { const a = i * 0.45; g.set(Math.round(Math.sin(a) * 2), -2 - Math.round(i * 0.55), Math.round(Math.cos(a) * 2 + 2), i % 3 ? '#8a5a3a' : '#5a3a2a'); }
-  } else if (kind === 'boomerang') {
-    for (let i = 0; i <= 7; i++) { g.set(0, i, i + 1, i % 3 ? wood : '#d84a4a'); g.set(0, i, i + 2, woodL); g.set(0, -i + 7, i + 9, i % 3 ? wood : '#d84a4a'); g.set(0, -i + 7, i + 10, woodL); }
-  } else if (kind === 'tome') {
-    g.box(-3, 3, -2, 5, -1, 1, (x, y, z) => Math.abs(z) === 1 ? '#6a2a3a' : '#f4ecd8'); g.box(-1, 1, 1, 3, 2, 2, gold);
   } else return null;
+  // refined weapons gain a ring of gold, then a glowing gem, by the grip
+  if (refine >= 3 && kind !== 'knuckle' && kind !== 'tome') S(1, 0, 0, gold);
+  if (refine >= 6 && kind !== 'knuckle' && kind !== 'tome') { S(-1, 0, 0, gem); S(1, 0, -1, gem); }
   return g;
 }
 
 // per-weapon resting angle in the hand (positive tips the business end down)
-const WPN_TILT = { sword: 1.0, katana: 1.0, dagger: 1.1, wrench: 1.0, staff: 0, rod: 0, spear: 0, bow: 0, harp: 0.2, greatsword: 0.6, axe: -0.9, hammer: -0.9, gun: 0.3, whip: 0, boomerang: 0.4, tome: 0.6 };
+const WPN_TILT = { sword: 1.0, katana: 1.0, dagger: 1.1, wrench: 1.0, staff: 0, rod: 0, spear: 0, bow: 0, harp: 0.2, greatsword: 0.6, axe: -0.9, hammer: -0.9, gun: 0.3, whip: 0, boomerang: 0.4, tome: 0.6, knuckle: 0 };
 
 const geoCache = new Map();
 function geometriesFor(look) {
@@ -354,6 +500,7 @@ const POSES = [
   { armR: -1.15, armL: -1.3, armRz: 0.35, armLz: -0.35, torso: 0.15, legL: -0.3, legR: 0.25 }, // guard
   { armR: -2.95, armL: 0.25, armRz: -0.15, armLz: 0.45, head: -0.12 }, // win
   { armR: 0.1, armL: -1.5, armLz: -0.1 }, // item
+  { armR: -0.45, armL: 0.25, armRz: -0.18, armLz: 0.3, torso: 0.22, head: 0.16, legL: -0.85, legR: 0.45 }, // weak: down on one knee, still holding on
 ];
 const JOINTS = ['armR', 'armL', 'armRz', 'armLz', 'legL', 'legR', 'torso', 'head', 'y', 'lie'];
 const DIR_ANGLE = { down: 0, up: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 };
@@ -418,6 +565,8 @@ export class VoxelPerson {
     this.head.rotation.x = c.head;
     if (this.cape) this.cape.rotation.x = 0.12 + (this.moving ? 0.35 + Math.sin(this.t * 9) * 0.06 : 0) + Math.max(0, -c.torso) * 0.5;
     if (this.battle && this.frame === BWIN) { this.body.position.y = Math.abs(Math.sin(this.t * 6)) * 0.12; }
+    else if (this.battle && this.frame === 10) { this.body.position.y = -0.19 * this.scale; // sink so the knee is down and the front foot is planted
+      this.torso.rotation.x = c.torso + Math.sin(this.t * 5) * 0.05; }
     else this.body.position.y = 0;
     if (PAPER && this.paper) {
       // a card cut from the page: flattened toward the reader, the figure printed on it at its own angle
@@ -491,10 +640,10 @@ export function renderPortrait(look, mode = 'face') {
   return url;
 }
 
-export function renderWeaponIcon(kind, metal, accent) {
+export function renderWeaponIcon(kind, metal, accent, tier = 0, refine = 0) {
   if (!PR) renderPortrait({ skin: 'light' }, 'face');
   const { r, scene, cam } = PR; const W = 40, H = 40;
-  const m = weaponMesh(kind, metal, accent); if (!m) return '';
+  const m = weaponMesh(kind, metal, accent, tier, refine); if (!m) return '';
   m.scale.setScalar(VS * 1.25); m.rotation.set(-0.75, 0.9, 0.2); m.layers.enableAll();
   const box = new THREE.Box3().setFromObject(m), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()).length();
   m.position.sub(c); scene.add(m);

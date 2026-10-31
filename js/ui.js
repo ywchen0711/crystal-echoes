@@ -1,14 +1,14 @@
 // Menus and windows: dialogue, choices, the main menu, shops, inns, notices and little overlays.
-import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js?v=12';
-import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js?v=12';
-import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js?v=12';
-import { ENEMIES } from './data.js?v=12';
-import { GRIND_DEFAULT, GRIND_OPTS } from './grind.js?v=12';
-import { STATE_N, STATE_DESC, REACTIONS, PAIRS, SETS, setBonus, huntText, NEW_ECHOES } from './depth.js?v=12';
-import { monsterPx } from './pixel.js?v=12';
-import { personSheet, battleSheet } from './pixel.js?v=12';
-import { lookOf } from './field.js?v=12';
-import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js?v=12';
+import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js?v=13';
+import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js?v=13';
+import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js?v=13';
+import { ENEMIES } from './data.js?v=13';
+import { GRIND_DEFAULT, GRIND_OPTS } from './grind.js?v=13';
+import { STATE_N, STATE_DESC, REACTIONS, PAIRS, SETS, setBonus, huntText, NEW_ECHOES } from './depth.js?v=13';
+import { monsterPx } from './pixel.js?v=13';
+import { personSheet, battleSheet } from './pixel.js?v=13';
+import { lookOf } from './field.js?v=13';
+import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js?v=13';
 
 const $ = (s) => document.querySelector(s);
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -31,7 +31,7 @@ export function itemIcon(gid, big = false) {
   const key = gid + (big ? 'B' : ''); if (itemIconCache.has(key)) return itemIconCache.get(key);
   let url = '';
   try {
-    if (G.slot === 'hand' && G.type !== 'shield') { const f = gearLook(G); url = f.weapon ? renderWeaponIcon(f.weapon, f.weaponMetal, f.weaponAccent) : ''; }
+    if (G.slot === 'hand' && G.type !== 'shield') { const f = gearLook(G); url = f.weapon ? renderWeaponIcon(f.weapon, f.weaponMetal, f.weaponAccent, f.weaponTier, f.weaponRefine) : ''; }
     else if (G.slot === 'acc') url = '';
     else url = renderPortrait(itemLook(gid), G.slot === 'head' && !big ? 'face' : 'full');
   } catch (e) { url = ''; }
@@ -325,7 +325,7 @@ export class UI {
     const S = this.S, I = ITEMS[id];
     if (!I || !I.use || I.use.dmg || I.use.escape || I.use.status && !I.use.self || I.use.analyze || I.use.cast || I.use.buff || I.use.evadeT) { if (I?.use) this.toast('戰鬥中才能使用'); return; }
     const spend = () => { S.items[id]--; if (!S.items[id]) delete S.items[id]; this.hud(); };
-    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js?v=12'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
+    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js?v=13'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
     if (I.use.meal) { S.meal = { fx: I.use.meal, n: 5, name: I.name }; spend(); this.G.audio.sfx('heal'); this.toast(`吃了${I.name}！之後5場戰鬥都有效果`); return; }
     if (I.use.repel) { S.repel = I.use.repel; S.lure = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人不會靠近了'); return; }
     if (I.use.lure) { S.lure = I.use.lure; S.repel = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人更容易出現了'); return; }
@@ -562,7 +562,7 @@ export class UI {
     if (S.gil < price) { await this.say('旅店老闆', '哎呀，錢好像不夠呢……', 'innkeep'); return false; }
     S.gil -= price;
     this.G.audio.music(null); await this.fade(1, 700);
-    const { healAll } = await import('./party.js?v=12'); healAll(S);
+    const { healAll } = await import('./party.js?v=13'); healAll(S);
     this.G.audio.sfx('save'); await wait(1200);
     await this.fade(0, 700); this.G.audio.music(this.G.field.def.bgm || this.G.field.theme.bgm);
     await this.say('旅店老闆', '早安！昨晚睡得好嗎？路上小心喔。', 'innkeep');

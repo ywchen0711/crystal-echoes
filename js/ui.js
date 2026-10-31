@@ -1,12 +1,12 @@
 // Menus and windows: dialogue, choices, the main menu, shops, inns, notices and little overlays.
 import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js';
-import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook } from './party.js';
+import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js';
 import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js';
 import { ENEMIES } from './data.js';
 import { monsterPx } from './pixel.js';
 import { personSheet, battleSheet } from './pixel.js';
 import { lookOf } from './field.js';
-import { renderPortrait } from './voxel.js';
+import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js';
 
 const $ = (s) => document.querySelector(s);
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -20,6 +20,20 @@ export function fullSprite(look, battle = false) {
   const L = lookOf(look); if (!L) return '';
   const key = (battle ? 'b' : 'f') + JSON.stringify(L); if (portraitCache.has(key)) return portraitCache.get(key);
   const url = renderPortrait(L, battle ? 'battle' : 'full'); portraitCache.set(key, url); return url;
+}
+
+// the picture of an equipment piece: the weapon itself, or a mannequin wearing the piece
+const itemIconCache = new Map();
+export function itemIcon(gid, big = false) {
+  const G = GEAR[gid]; if (!G) return '';
+  const key = gid + (big ? 'B' : ''); if (itemIconCache.has(key)) return itemIconCache.get(key);
+  let url = '';
+  try {
+    if (G.slot === 'hand' && G.type !== 'shield') { const f = gearLook(G); url = f.weapon ? renderWeaponIcon(f.weapon, f.weaponMetal, f.weaponAccent) : ''; }
+    else if (G.slot === 'acc') url = '';
+    else url = renderPortrait(itemLook(gid), G.slot === 'head' && !big ? 'face' : 'full');
+  } catch (e) { url = ''; }
+  itemIconCache.set(key, url); return url;
 }
 
 export class UI {
@@ -204,7 +218,8 @@ export class UI {
     const f = fxText(G.fx);
     const h = id ? this.S.heroes[id] : null;
     const teach = G.teach ? `<div class="gi-teach">✦ 可學會：<b>${SKILLS[G.teach].name}</b>（${SCHOOL_N[SKILLS[G.teach].school]}）${h ? (h.spells?.includes(G.teach) ? '　已學會' : `　AP ${h.ap?.[G.teach] || 0}/${G.ap}`) : `　需要 AP ${G.ap}`}<br><small>${SKILLS[G.teach].desc}</small></div>` : '';
-    return `<div class="gi"><h4>${G.name}</h4><div class="gi-kind">${this.gearKind(G)}${G.tier != null ? `　${TIER_N[G.tier]}階` : ''}${G.refine ? `　強化+${G.refine}` : ''}</div>
+    const pic = itemIcon(g, true);
+    return `<div class="gi">${pic ? `<img class="gi-pic" src="${pic}">` : ''}<h4>${G.name}</h4><div class="gi-kind">${this.gearKind(G)}${G.tier != null ? `　${TIER_N[G.tier]}階` : ''}${G.refine ? `　強化+${G.refine}` : ''}</div>
       <div>${this.gearLine(g).split('　')[0] || ''}</div>
       ${W ? `<div class="gi-trait">${W.trait}</div>` : ''}${G.type === 'shield' ? `<div class="gi-trait">盾：被物理攻擊時有機會完全格擋</div>` : ''}
       ${f.length ? `<div class="gi-fx">${f.map(x => `<span>${x}</span>`).join('')}</div>` : ''}${G.desc ? `<div>${G.desc}</div>` : ''}${teach}</div>`;
@@ -233,7 +248,7 @@ export class UI {
       const slot = EQUIP_SLOTS[i];
       const opts = Object.keys(S.items).filter(g => S.items[g] > 0 && GEAR[g] && slotFits(slot, g) && canEquip(id, g)).sort((a, b) => (GEAR[b].tier || 0) - (GEAR[a].tier || 0) || (GEAR[b].price || 0) - (GEAR[a].price || 0));
       if (!opts.length && !h.equip[slot]) { this.toast(`沒有${HEROES[id].name}能裝在「${SLOT_N[slot]}」的東西`); continue; }
-      const j = await this.choose([{ label: '（卸下）' }, ...opts.map(g => ({ label: GEAR[g].name + (GEAR[g].teach && !h.spells?.includes(GEAR[g].teach) ? ' ✦' : ''), sub: this.gearKind(GEAR[g]) + ' ×' + S.items[g] }))], { title: SLOT_N[slot], info: (k) => k === 0 ? this.compareWith(id, slot, null) : this.compareWith(id, slot, opts[k - 1]) + this.gearHTML(opts[k - 1], id) });
+      const j = await this.choose([{ label: '（卸下）' }, ...opts.map(g => ({ icon: itemIcon(g), label: GEAR[g].name + (GEAR[g].teach && !h.spells?.includes(GEAR[g].teach) ? ' ✦' : ''), sub: this.gearKind(GEAR[g]) + ' ×' + S.items[g] }))], { title: SLOT_N[slot], info: (k) => k === 0 ? this.compareWith(id, slot, null) : this.compareWith(id, slot, opts[k - 1]) + this.gearHTML(opts[k - 1], id) });
       if (j < 0) continue;
       equip(S, id, slot, j === 0 ? null : opts[j - 1]); this.G.audio.sfx('item');
     }
@@ -378,6 +393,7 @@ export class UI {
         { label: '音效音量', sub: '▮'.repeat(Math.round(st.sfx * 10)) + '▯'.repeat(10 - Math.round(st.sfx * 10)) },
         { label: '畫質', sub: ['流暢', '標準', '精美'][st.quality] },
         { label: '像素風格', sub: ['細緻', '標準', '復古', '關閉'][st.pixel ?? 0] },
+        { label: '角色厚度', sub: (st.depth ?? 0.6) < 0.8 ? '薄' : '標準' },
         { label: '戰鬥速度', sub: '×' + (st.speed || 1) },
         { label: '文字速度', sub: (st.textSpeed || 28) <= 12 ? '快' : (st.textSpeed || 28) >= 40 ? '慢' : '普通' },
         { label: '遇敵', sub: this.G.encMul === 0.5 ? '較少' : '普通' },
@@ -393,9 +409,10 @@ export class UI {
     if (i === 1) st.sfx = Math.max(0, Math.min(1, Math.round((st.sfx + d * 0.1) * 10) / 10));
     if (i === 2) st.quality = (st.quality + (d > 0 ? 1 : 2)) % 3;
     if (i === 3) st.pixel = ((st.pixel ?? 0) + (d > 0 ? 1 : 3)) % 4;
-    if (i === 4) st.speed = st.speed === 2 ? 1 : 2;
-    if (i === 5) st.textSpeed = (st.textSpeed || 28) === 28 ? 10 : (st.textSpeed || 28) === 10 ? 45 : 28;
-    if (i === 6) { this.G.encMul = this.G.encMul === 0.5 ? 1 : 0.5; st.enc = this.G.encMul; }
+    if (i === 4) st.depth = (st.depth ?? 0.6) < 0.8 ? 1 : 0.6;
+    if (i === 5) st.speed = st.speed === 2 ? 1 : 2;
+    if (i === 6) st.textSpeed = (st.textSpeed || 28) === 28 ? 10 : (st.textSpeed || 28) === 10 ? 45 : 28;
+    if (i === 7) { this.G.encMul = this.G.encMul === 0.5 ? 1 : 0.5; st.enc = this.G.encMul; }
     this.G.applySettings();
   }
 
@@ -416,7 +433,7 @@ export class UI {
             sub = list.filter(id => groupOf(id) === groups[gsel]);
           }
           for (;;) {
-            const i = await this.choose(sub.map(id => { const it = ITEMS[id] || GEAR[id]; return { label: it.name + (GEAR[id]?.teach ? ' ✦' : ''), sub: it.price + ' G' + (S.items[id] ? `　持有${S.items[id]}` : ''), disabled: S.gil < it.price, desc: ITEMS[id]?.desc || this.gearKind(GEAR[id]) + '　' + this.gearLine(id) }; }), { title: `購買　<span class="gil">${S.gil} G</span>`, info: (i) => GEAR[sub[i]] ? this.gearHTML(sub[i]) + this.whoCan(sub[i]) : '' });
+            const i = await this.choose(sub.map(id => { const it = ITEMS[id] || GEAR[id]; return { icon: GEAR[id] ? itemIcon(id) : undefined, label: it.name + (GEAR[id]?.teach ? ' ✦' : ''), sub: it.price + ' G' + (S.items[id] ? `　持有${S.items[id]}` : ''), disabled: S.gil < it.price, desc: ITEMS[id]?.desc || this.gearKind(GEAR[id]) + '　' + this.gearLine(id) }; }), { title: `購買　<span class="gil">${S.gil} G</span>`, info: (i) => GEAR[sub[i]] ? this.gearHTML(sub[i]) + this.whoCan(sub[i]) : '' });
             if (i < 0) break;
             const id = sub[i], it = ITEMS[id] || GEAR[id];
             const n = await this.choose([1, 3, 5, 10].map(k => ({ label: `${k} 個`, sub: it.price * k + ' G', disabled: S.gil < it.price * k })), { title: it.name, cls: 'small' });

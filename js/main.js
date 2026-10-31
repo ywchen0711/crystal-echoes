@@ -2,6 +2,7 @@
 import * as THREE from '../lib/three.module.min.js';
 import { createRenderer, createPost } from './render.js';
 import { Field, setHeroLook } from './field.js';
+import { setDepth } from './voxel.js';
 import { Battle } from './battle.js';
 import { UI, fmtTime } from './ui.js';
 import { Audio } from './audio.js';
@@ -118,6 +119,7 @@ class Game {
     this.encMul = st.enc || 1;
     this.resize();
     this.post.setPixelStyle(st.pixel ?? 0);
+    setDepth(st.depth ?? 0.6);
   }
 
   // ---------------------------------------------------------------- field input

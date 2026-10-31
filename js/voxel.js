@@ -8,6 +8,8 @@ const toLayer = (root) => root.traverse((o) => o.layers.set(CHAR_LAYER));
 const VS = 1.75 / 46; // world units per voxel (a person is about 46 voxels tall)
 const LEG = 17;       // leg length in voxels
 const HEAD = 0.8;     // heads are drawn finer and smaller than the body (less chibi)
+let DEPTH = 0.6;      // front-to-back thickness (1 = full voxel depth)
+export function setDepth(v) { DEPTH = v; }
 const SKINS = { light: '#f3c9a4', tan: '#d9a274', dark: '#9c6a48', pale: '#f6dccb', green: '#9cc79a', blue: '#9db3e0' };
 
 // ---------------------------------------------------------------- voxel grid + mesher
@@ -106,7 +108,9 @@ function partsFor(s) {
     tor.fill(-7, 7, -4, 1, -4, 4, (x, y, z) => (Math.abs(z) === 4 && Math.abs(x) <= 5) || (Math.abs(x) === 6 && Math.abs(z) <= 3) ? !(z === 4 && x === 0 && y < 0) : false, (x, y, z) => y === -4 ? (s.top2 ? T2 : shade(T, -0.32)) : y >= 0 ? shade(T, -0.18) : shade(T, -0.06));
     tor.box(6, 7, 0, 2, 1, 2, '#6a4a2a'); tor.set(7, 2, 1, '#e8c050');
   }
-  if (s.top2) tor.fill(-6, 6, 12, 13, -3, 3, (x, y, z) => (Math.abs(x) >= 5 || Math.abs(z) === 3) && tor.has(x, y, z), shade(T2, 0.05));
+  if (s.top2) tor.fill(-6, 6, 12, 13, -3, 3, (x, y, z) => (Math.abs(x) >= 5 || Math.abs(z) === 3) && tor.has(x, y, z), s.trim || shade(T2, 0.05));
+  if (s.emblem) { tor.box(-1, 1, 8, 10, 3, 3, s.emblem); tor.set(0, 9, 4, shade(s.emblem, 0.35)); }
+  if (s.buckle) tor.box(-1, 1, 2, 3, 3, 3, s.buckle);
   if (s.robe) {
     for (let y = -15; y <= 1; y++) {
       const t = (1 - y) / 16, hx = 6.6 + t * 2.4, hz = 3.8 + t * 2;
@@ -122,7 +126,7 @@ function partsFor(s) {
 
   // arms: pivot at the shoulder; the hand is at local y -10
   const arm = new VGrid();
-  arm.fill(-1, 1, -11, 0, -1, 1, (x, y, z) => !(y === 0 && Math.abs(x) === 1 && Math.abs(z) === 1) && !(y === -11 && Math.abs(x) === 1 && Math.abs(z) === 1), (x, y) => y <= -9 ? (s.gloves ? (y === -9 ? shade(s.gloves, 0.15) : s.gloves) : skin) : y === -8 ? (s.gloves ? shade(s.gloves, -0.2) : shade(T, -0.25)) : y >= -1 ? shade(T, 0.08) : T);
+  arm.fill(-1, 1, -11, 0, -1, 1, (x, y, z) => !(y === 0 && Math.abs(x) === 1 && Math.abs(z) === 1) && !(y === -11 && Math.abs(x) === 1 && Math.abs(z) === 1), (x, y) => y <= -9 ? (s.gloves ? (y === -9 ? shade(s.gloves, 0.15) : s.gloves) : skin) : y === -8 ? (s.cuff || (s.gloves ? shade(s.gloves, -0.2) : shade(T, -0.25))) : y >= -1 ? shade(T, 0.08) : T);
   if (s.pauldron) arm.fill(-2, 2, -3, 1, -2, 2, (x, y, z) => !(y === 1 && (Math.abs(x) === 2 || Math.abs(z) === 2)), (x, y) => y === -3 ? shade(s.pauldron, -0.3) : y === 1 ? shade(s.pauldron, 0.25) : s.pauldron);
   P.arm = arm;
 
@@ -207,14 +211,18 @@ function partsFor(s) {
       const shell = (y0, y1, region, out, col) => hd.fill(-12, 12, y0, y1, -12, 12, (x, y, z) => !rbox(x, y, z, 0, cy, 0, R, R, R) && rbox(x, y, z, 0, cy + 0.3, -0.2, R + out, R + out, R + out) && region(x, y, z), col);
       if (s.hat === 'hood') {
         shell(-2, 18, (x, y, z) => !(z >= 2 && y <= 11 && Math.abs(x) <= 6), 2.4, (x, y, z) => z >= 3 && (y === 12 || Math.abs(x) === 7) ? CD : y >= 14 ? CL : C);
-      } else if (s.hat === 'helm') {
+      } else if (s.hat === 'helm' || s.hat === 'horned' || s.hat === 'crown') {
         shell(3, 18, (x, y, z) => y >= 9 || (z <= -2 && y >= 3) || (Math.abs(x) >= 7 && y >= 5), 2.2, (x, y, z) => y === 9 && z > -2 ? CD : y >= 15 ? CL : C);
-        hd.box(0, 0, 17, 20, -6, 5, (x, y, z) => y === 17 || y - 17 >= Math.abs(z + 0.5) * 0.4 ? (band || '#d84a4a') : null);
-        hd.box(-1, 1, 17, 18, -6, 6, band || '#d84a4a');
-      } else if (s.hat === 'cap') {
+        if (band && s.hat === 'helm') { hd.box(0, 0, 17, 20, -6, 5, (x, y, z) => y === 17 || y - 17 >= Math.abs(z + 0.5) * 0.4 ? band : null); hd.box(-1, 1, 17, 18, -6, 6, band); }
+        if (s.hat === 'horned') for (const sx of [-1, 1]) for (let i = 0; i < 9; i++) { const x = sx * (9 + Math.round(i * 0.45)), y = 12 + Math.round(i * 0.8 + (i > 5 ? (i - 5) * 0.6 : 0)), z = -Math.round(i * 0.2); hd.box(x, x + sx, y, y + 1, z - 1, z, i > 6 ? '#fff4dc' : '#e8dcc0'); }
+        if (s.hat === 'crown') { const G = band || '#e8c050'; hd.fill(-10, 10, 17, 18, -10, 10, (x, y, z) => { const r = Math.hypot(x, z); return r >= 6.5 && r <= 8.2; }, G); for (let a = 0; a < 8; a++) { const x = Math.round(Math.cos(a / 8 * Math.PI * 2) * 7.3), z = Math.round(Math.sin(a / 8 * Math.PI * 2) * 7.3); hd.box(x, x, 19, 21, z, z, G); } hd.box(0, 0, 18, 18, 8, 8, '#d83a5a'); }
+      } else if (s.hat === 'cap' || s.hat === 'feather') {
         shell(10, 18, () => true, 2.0, (x, y) => y >= 15 ? CL : C);
         hd.fill(-6, 6, 10, 10, 7, 11, (x, y, z) => x * x / 40 + (z - 7) ** 2 / 18 <= 1, CD);
         hd.box(0, 0, 17, 17, -1, 0, CD);
+        if (s.hat === 'feather') for (let i = 0; i < 10; i++) hd.box(8 + Math.round(i * 0.3), 8 + Math.round(i * 0.3), 13 + i, 13 + i, -2 - Math.round(i * 0.6), -1 - Math.round(i * 0.6), i > 7 ? '#ffffff' : (band || '#d83a3a'));
+      } else if (s.hat === 'circlet') {
+        shell(10, 11, () => true, 1.6, (x, y, z) => z > 5 && Math.abs(x) <= 1 ? (band || '#6ac8f0') : C);
       } else if (s.hat === 'band') {
         shell(9, 10, () => true, 2.0, (x, y) => y === 10 ? CL : C);
         hd.box(-1, 1, 7, 10, -11, -10, C); hd.box(1, 2, 3, 6, -12, -11, CD);
@@ -226,25 +234,36 @@ function partsFor(s) {
   // cape: hangs from the shoulders behind the back
   if (s.cape) {
     const C = s.cape, cp = new VGrid();
-    for (let y = -25; y <= 0; y++) { const hw = 6 + Math.round((-y) / 9); cp.box(-hw, hw, y, y, -1, 0, (x, _, z) => y <= -24 ? shade(C, -0.3) : z === 0 ? shade(C, -0.25) : Math.abs(x) === hw ? shade(C, -0.12) : C); }
+    for (let y = -25; y <= 0; y++) { const hw = 6 + Math.round((-y) / 9); cp.box(-hw, hw, y, y, -1, 0, (x, _, z) => y <= -24 ? (s.capeTrim || shade(C, -0.3)) : z === 0 ? shade(C, -0.25) : Math.abs(x) === hw ? shade(C, -0.12) : C); }
     cp.box(-7, 7, 0, 1, -1, 2, (x, y) => y === 1 ? shade(C, 0.2) : C);
     cp.box(-1, 1, 0, 1, 3, 3, gold);
     P.cape = cp;
   }
 
   // weapon in the right hand (hand-local coordinates)
-  const wp = s.weapon && weaponGrid(s.weapon);
+  const wp = s.weapon && tintWeapon(weaponGrid(s.weapon), s.weaponMetal, s.weaponAccent);
   if (wp) P.weapon = wp;
-  if (s.weaponL) { const wl = weaponGrid(s.weaponL); if (wl) P.weaponL = wl; }
+  if (s.weaponL) { const wl = tintWeapon(weaponGrid(s.weaponL), s.weaponLMetal, s.weaponLAccent); if (wl) P.weaponL = wl; }
   if (s.shield) {
     const sh = new VGrid(), S = s.shieldColor || '#5a7ac8';
     sh.fill(2, 3, -11, 4, -6, 6, (x, y, z) => (y + 3.5) ** 2 / 64 + z * z / 40 <= 1 && (x === 2 || (y + 3.5) ** 2 / 64 + z * z / 40 <= 0.62), (x, y, z) => (y + 3.5) ** 2 / 64 + z * z / 40 > 0.7 ? gold : x === 3 ? shade(S, 0.12) : S);
-    sh.box(4, 4, -4, -3, -1, 0, gold);
+    sh.box(4, 4, -4, -3, -1, 0, s.shieldEmblem || gold);
+    if (s.shieldEmblem) sh.box(3, 3, -6, -1, -1, 0, shade(s.shieldEmblem, -0.1));
+    if (s.shieldRim) for (const [k, v] of sh.m) if (v[3] === gold) v[3] = s.shieldRim;
     P.shield = sh;
   }
   return P;
 }
 
+function tintWeapon(g, metal, accent) {
+  if (!g || (!metal && !accent)) return g;
+  const map = {};
+  if (metal) { map['#cdd5e0'] = metal; map['#7d8aa0'] = shade(metal, -0.35); map['#dfe6f0'] = shade(metal, 0.1); }
+  if (accent) for (const c of ['#e6ebf2', '#ffffff', '#f4f6fa', '#ff9a4a', '#8ae0ff', '#d84a4a']) map[c] = c === '#ffffff' || c === '#f4f6fa' ? shade(accent, 0.45) : accent;
+  for (const v of g.m.values()) if (map[v[3]]) v[3] = map[v[3]];
+  return g;
+}
+export function weaponMesh(kind, metal, accent) { const g = tintWeapon(weaponGrid(kind), metal, accent); if (!g) return null; const m = new THREE.Mesh(meshGrid(g, 0.01), voxelMaterial(0.12)); return m; }
 function weaponGrid(kind) {
   const g = new VGrid();
   const steel = '#cdd5e0', steelD = '#7d8aa0', wood = '#8a5a2a', woodL = '#b88848', gold = '#e8c050';
@@ -391,6 +410,7 @@ export class VoxelPerson {
     else this.body.position.y = 0;
     // knocked out: lie on the back
     this.body.rotation.set(-1.5 * c.lie, this.ang, 0, 'YXZ');
+    this.body.scale.set(VS * this.scale, VS * this.scale, VS * this.scale * DEPTH);
     if (c.lie > 0.01) this.body.position.y = 0.16 * this.scale * c.lie;
   }
   dispose() { this.mat.dispose(); }
@@ -443,6 +463,33 @@ export function renderPortrait(look, mode = 'face') {
   return url;
 }
 
+export function renderWeaponIcon(kind, metal, accent) {
+  if (!PR) renderPortrait({ skin: 'light' }, 'face');
+  const { r, scene, cam } = PR; const W = 40, H = 40;
+  const m = weaponMesh(kind, metal, accent); if (!m) return '';
+  m.scale.setScalar(VS * 1.25); m.rotation.set(-0.75, 0.9, 0.2); m.layers.enableAll();
+  const box = new THREE.Box3().setFromObject(m), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()).length();
+  m.position.sub(c); scene.add(m);
+  r.setSize(W, H, false); cam.aspect = 1; cam.updateProjectionMatrix(); cam.position.set(0, 0, sz / 0.36); cam.lookAt(0, 0, 0);
+  r.render(scene, cam); scene.remove(m); m.geometry.dispose(); m.material.dispose();
+  return pixelUp(r.domElement, W, H);
+}
+// scale a small render up 4x with hard edges and a dark outline, like a hand-made sprite
+function pixelUp(src, W, H) {
+  const k = 4, out = document.createElement('canvas'); out.width = W * k; out.height = H * k;
+  const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; const tg = tmp.getContext('2d'); tg.drawImage(src, 0, 0);
+  const d = tg.getImageData(0, 0, W, H).data, a = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? 0 : d[(y * W + x) * 4 + 3];
+  const o = tg.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    if (d[i + 3] > 128) { for (let c = 0; c < 3; c++) o.data[i + c] = Math.round(d[i + c] / 12) * 12; o.data[i + 3] = 255; }
+    else if (a(x + 1, y) > 128 || a(x - 1, y) > 128 || a(x, y + 1) > 128 || a(x, y - 1) > 128) { o.data[i] = 14; o.data[i + 1] = 10; o.data[i + 2] = 26; o.data[i + 3] = 220; }
+  }
+  tg.putImageData(o, 0, 0);
+  const og = out.getContext('2d'); og.imageSmoothingEnabled = false; og.drawImage(tmp, 0, 0, W * k, H * k);
+  return out.toDataURL();
+}
+
 export class VoxelSprite {
   constructor(px, opts = {}) {
     this.voxel = true;
@@ -452,7 +499,7 @@ export class VoxelSprite {
     if (!geo) { geo = meshGrid(slab(px), 0.03); slabCache.set(key, geo); }
     this.glow = opts.glow ?? 0.16; this.mat = voxelMaterial(this.glow);
     this.inner = new THREE.Mesh(geo, this.mat); this.inner.castShadow = true;
-    const k = this.scale / 16; this.inner.scale.setScalar(k); this.inner.position.y = 0.5 * k;
+    const k = this.scale / 16; this.inner.scale.set(k, k, k * (0.4 + DEPTH * 0.6)); this.inner.position.y = 0.5 * k;
     this.mesh = new THREE.Group(); this.mesh.add(this.inner); toLayer(this.mesh);
     this.w = px.w * k; this.h = px.h * k;
     this.frame = 0;

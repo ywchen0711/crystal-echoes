@@ -225,35 +225,62 @@ export function gearColor(G) {
   return METAL_C[t];
 }
 const darker = (hex, k) => { const n = parseInt(hex.slice(1), 16); const f = (v) => Math.max(0, Math.min(255, Math.round(v * k))).toString(16).padStart(2, '0'); return '#' + f(n >> 16 & 255) + f(n >> 8 & 255) + f(n & 255); };
+const EL_C = { fire: '#e8502a', ice: '#7ad8f8', thunder: '#f0d040', water: '#3a8ae8', wind: '#5ad88a', earth: '#b8843a', light: '#fff0b0', dark: '#9a4ae0' };
+const AFFIX_C = ['#d83a5a', '#3ac8a8', '#e8a030', '#8a5ae8', '#4aa8e8', '#c8e04a', '#e86ab8', '#e8e0c8'];
+const hashS = (str) => { let h = 7; for (const ch of str) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
+// the accent colour of a piece: its element if it has one, otherwise a colour tied to its special effect
+export function gearAccent(G) {
+  if (!G) return null;
+  const el = G.enchant || [].concat(G.fx?.el || [])[0] || (G.fx?.resist ? Object.keys(G.fx.resist)[0] : null);
+  if (el && EL_C[el]) return EL_C[el];
+  if (G.affix) return AFFIX_C[hashS(G.affix) % AFFIX_C.length];
+  return null;
+}
+// what one piece puts on the doll; the same fragment draws the item's own picture
+export function gearLook(G, hero) {
+  if (!G) return {};
+  const c = gearColor(G), a = gearAccent(G), t = G.tier || 0, H = hero ? HEROES[hero] : null, o = {};
+  if (G.slot === 'hand') {
+    if (G.type === 'shield') { o.shield = true; o.shieldColor = c; o.shieldEmblem = a || (t >= 4 ? '#e8c050' : undefined); o.shieldRim = t >= 6 ? '#fff0b0' : t >= 2 ? '#e8c050' : darker(c, 0.7); }
+    else { o.weapon = WTYPES[G.type]?.model ?? null; o.weaponMetal = METAL_C[Math.min(7, t)]; o.weaponAccent = a; }
+  } else if (G.slot === 'head') {
+    if (G.style === 'heavy') { o.hat = t >= 6 ? 'crown' : t >= 4 ? 'horned' : 'helm'; o.hatColor = c; o.hatBand = a || (t >= 2 ? (t >= 6 ? '#e8c050' : '#c83a3a') : undefined); }
+    else if (G.style === 'light') { o.hat = ['cap', 'band', 'feather'][t % 3]; o.hatColor = c; o.hatBand = a || '#c83a3a'; }
+    else { o.hat = t >= 6 ? 'circlet' : (H?.look.hat === 'wizard' ? 'wizard' : 'hood'); o.hatColor = t >= 6 ? '#e8c050' : c; o.hatBand = a || (t >= 3 ? '#e8c050' : undefined); }
+  } else if (G.slot === 'body') {
+    o.top = c; o.robe = G.style === 'robe';
+    if (G.style === 'heavy') { o.pauldron = darker(c, 1.08); o.trim = t >= 4 ? '#e8c050' : undefined; }
+    if (G.style === 'robe') { o.trim = t >= 3 ? '#e8c050' : undefined; o.collar = t >= 3 ? '#e8c050' : undefined; }
+    o.emblem = a || undefined;
+  } else if (G.slot === 'arms') { o.gloves = c; o.cuff = a || undefined; if (G.style === 'heavy') o.pauldronFromArms = darker(c, 1.08); }
+  else if (G.slot === 'waist') { o.belt = darker(c, 0.8); o.buckle = a || (t >= 3 ? '#e8c050' : undefined); }
+  else if (G.slot === 'legs') o.legs = darker(c, 0.9);
+  else if (G.slot === 'feet') o.boots = darker(c, 0.85);
+  else if (G.slot === 'back') { o.cape = a ? darker(a, 0.75) : G.style === 'heavy' ? (H?.look.cape || darker(c, 0.7)) : darker(c, 0.95); o.capeTrim = t >= 4 ? '#e8c050' : undefined; }
+  return o;
+}
+// a plain mannequin for item pictures
+export const MANNEQUIN = { skin: '#d8c0a8', hair: '#6a6a72', hairStyle: 'short', top: '#9a948a', legs: '#6a6660', boots: '#5a5048', eyes: '#3a3a44' };
+export function itemLook(gid) {
+  const G = GEAR[gid]; if (!G) return null;
+  const f = gearLook(G); const L = { ...MANNEQUIN, ...f };
+  if (f.pauldronFromArms) L.pauldron = f.pauldronFromArms;
+  return L;
+}
 export function paperLook(S, id, equipOverride) {
   const H = HEROES[id], h = S.heroes[id]; if (!H) return null;
   const L = { ...H.look }; if (!h) return L;
   const eq = equipOverride || h.equip, g = (sl) => GEAR[eq[sl]];
-  // hands: weapons and shields
+  // start from the hero's own clothes; armour goes over them and the signature colour stays as trim
+  delete L.hat; delete L.hatColor; delete L.hatBand; L.weapon = null; L.weaponL = null; L.shield = false;
+  if (!H.look.cape) delete L.cape;
   const R = g('R'), Lh = g('L');
   const wpn = [R, Lh].filter(x => x && x.type !== 'shield'), shield = [Lh, R].find(x => x?.type === 'shield');
-  L.weapon = wpn[0] ? (WTYPES[wpn[0].type]?.model ?? null) : null;
-  L.weaponL = wpn[1] ? (WTYPES[wpn[1].type]?.model ?? null) : null;
-  L.shield = !!shield; L.shieldColor = shield ? gearColor(shield) : undefined;
-  // head
-  const hd = g('head');
-  if (!hd) { delete L.hat; delete L.hatColor; }
-  else if (hd.style === 'heavy') { L.hat = 'helm'; L.hatColor = gearColor(hd); L.hatBand = H.look.cape || H.color; }
-  else if (hd.style === 'light') { L.hat = hd.tier % 3 === 2 ? 'band' : 'cap'; L.hatColor = gearColor(hd); }
-  else if (hd.style === 'robe') { L.hat = H.look.hat === 'wizard' ? 'wizard' : 'hood'; L.hatColor = gearColor(hd); L.hatBand = H.color; }
-  // body: the hero's signature colour stays as the shirt or trim under the armour
+  if (wpn[0]) Object.assign(L, gearLook(wpn[0], id));
+  if (wpn[1]) { const f = gearLook(wpn[1], id); L.weaponL = f.weapon; L.weaponLMetal = f.weaponMetal; L.weaponLAccent = f.weaponAccent; }
+  if (shield) Object.assign(L, gearLook(shield, id));
+  for (const sl of ['head', 'arms', 'waist', 'legs', 'feet', 'back']) { const G = g(sl); if (!G) continue; const f = gearLook(G, id); if (f.pauldronFromArms && !L.pauldronSet) L.pauldron = f.pauldronFromArms; delete f.pauldronFromArms; Object.assign(L, f); }
   const bd = g('body');
-  if (bd && eq.body !== 'a_cloth') {
-    const c = gearColor(bd);
-    if (bd.style === 'heavy') { L.top = c; L.top2 = H.look.top; L.pauldron = darker(c, 1.1); L.robe = false; }
-    else if (bd.style === 'light') { L.top = c; L.top2 = H.look.top; L.robe = false; L.pauldron = undefined; }
-    else { L.top = c; L.top2 = H.look.top2 || H.color; L.robe = true; L.pauldron = undefined; }
-  }
-  const ar = g('arms'); if (ar) { L.gloves = gearColor(ar); if (ar.style === 'heavy' && !L.pauldron) L.pauldron = gearColor(ar); }
-  const ws = g('waist'); if (ws) L.belt = darker(gearColor(ws), 0.8);
-  const lg = g('legs'); if (lg) L.legs = darker(gearColor(lg), 0.9);
-  const ft = g('feet'); if (ft) L.boots = darker(gearColor(ft), 0.85);
-  const bk = g('back'); if (bk) L.cape = bk.style === 'heavy' ? (H.look.cape || darker(H.color, 0.7)) : darker(gearColor(bk), 0.95);
-  else if (!H.look.cape) delete L.cape;
+  if (bd && eq.body !== 'a_cloth') { const f = gearLook(bd, id); Object.assign(L, f); L.top2 = bd.style === 'robe' ? (H.look.top2 || H.color) : H.look.top; if (bd.style !== 'heavy' && !g('arms')?.style?.includes('heavy')) L.pauldron = undefined; }
   return L;
 }

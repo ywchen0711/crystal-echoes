@@ -5,7 +5,7 @@ import { RenderPass } from '../lib/addons/RenderPass.js';
 import { UnrealBloomPass } from '../lib/addons/UnrealBloomPass.js';
 import { OutputPass } from '../lib/addons/OutputPass.js';
 import { ShaderPass } from '../lib/addons/ShaderPass.js';
-import { texFrom } from './pixel.js';
+import { texFrom } from './pixel.js?v=8';
 import { Pass, FullScreenQuad } from '../lib/addons/Pass.js';
 
 // characters and monsters live on their own layer so they can be drawn as crisp, outlined pixel art
@@ -63,12 +63,11 @@ const PixelComposite = {
   uniforms: { tDiffuse: { value: null }, tChar: { value: null }, low: { value: new THREE.Vector2(1, 1) }, outline: { value: new THREE.Vector3(0.035, 0.025, 0.07) }, outlineMix: { value: 0.6 }, levels: { value: 14 }, paper: { value: 1 }, paperCol: { value: new THREE.Vector3(0.97, 0.94, 0.87) } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: `uniform sampler2D tDiffuse, tChar; uniform vec2 low; uniform vec3 outline, paperCol; uniform float levels, outlineMix, paper; varying vec2 vUv;
-    vec2 px, uv;
-    float A(float x, float y) { return texture2D(tChar, uv + vec2(x, y) * px).a; }
+    #define A(x, y) texture2D(tChar, uv + vec2(x, y) * px).a
     float hsh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
-      px = 1.0 / low; uv = (floor(vUv * low) + 0.5) * px;
+      vec2 px = 1.0 / low; vec2 uv = (floor(vUv * low) + 0.5) * px;
       vec4 c = texture2D(tChar, uv);
       if (paper > 0.5) {
         float gr = hsh(floor(vUv * low));

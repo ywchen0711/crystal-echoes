@@ -1,12 +1,12 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js';
-import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP } from './party.js';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js';
-import { lookOf } from './field.js';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=8';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=8';
+import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=8';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=8';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP } from './party.js?v=8';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=8';
+import { lookOf } from './field.js?v=8';
 
 const ENEMY_DMG = 1.55;
 const BG = {
@@ -955,7 +955,7 @@ export class Battle {
       (e.drops || []).forEach(([id, ch], slot) => { if (id && Math.random() < Math.min(1, ch * dropMul)) { drops.push(id); addItem(this.S, id, 1); this.S.dropSeen[u.id + ':' + slot] = 1; } });
     }
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js');
+    const { gainExp, gainBond } = await import('./party.js?v=8');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);

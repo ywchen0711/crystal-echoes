@@ -1,7 +1,7 @@
 // The story, every conversation, side quests, sanctum trials, minigames and the shops' stock.
-import { HEROES, ECHOES, SKILLS, ITEMS, GEAR, ENEMIES, ARENA, SUMMONS } from './data.js';
-import { addHero, addEcho, setEcho, addItem, itemName, healAll, heroStats } from './party.js';
-import { GEAR_BY_TIER, SPELLS } from './content.js';
+import { HEROES, ECHOES, SKILLS, ITEMS, GEAR, ENEMIES, ARENA, SUMMONS } from './data.js?v=8';
+import { addHero, addEcho, setEcho, addItem, itemName, healAll, heroStats } from './party.js?v=8';
+import { GEAR_BY_TIER, SPELLS } from './content.js?v=8';
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 

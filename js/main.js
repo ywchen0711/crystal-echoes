@@ -7,7 +7,7 @@ import { Battle } from './battle.js?v=8';
 import { UI, fmtTime } from './ui.js?v=8';
 import { Audio } from './audio.js?v=8';
 import { Input } from './input.js?v=8';
-import { makeStory } from './story.js?v=8';
+import { makeStory, QUESTS } from './story.js?v=8';
 import { MAPS } from './maps.js?v=8';
 import { HEROES, ITEMS, ENEMIES } from './data.js?v=8';
 import { BESTIARY_NEW } from './content.js?v=8';
@@ -111,6 +111,7 @@ class Game {
       return neg ? !v : v;
     });
   }
+  quests() { return QUESTS; }
   leaderLook() { return this.S.party[0] || 'aren'; }
   nightFor(id) { return id === 'port' && this.S.flags.port_night; }
   mapName() { return this.field.def?.name || ''; }

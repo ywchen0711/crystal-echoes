@@ -1,6 +1,6 @@
 // Pixel art made in code: characters, monsters, tiles and props, all drawn on small canvases.
 import * as THREE from '../lib/three.module.min.js';
-import { hdCanvas, hdTexture, hdProp } from './hdtex.js?v=10';
+import { hdCanvas, hdTexture, hdProp } from './hdtex.js?v=11';
 
 let seed = 1234;
 export const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;

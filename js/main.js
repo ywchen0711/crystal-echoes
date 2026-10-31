@@ -1,17 +1,19 @@
 // Crystal Echoes: wires the renderer, field, battles, menus, story and saving together.
 import * as THREE from '../lib/three.module.min.js';
-import { createRenderer, createPost } from './render.js?v=10';
-import { Field, setHeroLook } from './field.js?v=10';
-import { setDepth, setPaper, setPaperCam } from './voxel.js?v=10';
-import { Battle } from './battle.js?v=10';
-import { UI, fmtTime } from './ui.js?v=10';
-import { Audio } from './audio.js?v=10';
-import { Input } from './input.js?v=10';
-import { makeStory, QUESTS } from './story.js?v=10';
-import { MAPS } from './maps.js?v=10';
-import { HEROES, ITEMS, ENEMIES } from './data.js?v=10';
-import { BESTIARY_NEW } from './content.js?v=10';
-import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=10';
+import { createRenderer, createPost } from './render.js?v=11';
+import { Field, setHeroLook } from './field.js?v=11';
+import { setDepth, setPaper, setPaperCam } from './voxel.js?v=11';
+import { Battle } from './battle.js?v=11';
+import { UI, fmtTime } from './ui.js?v=11';
+import { Audio } from './audio.js?v=11';
+import { Input } from './input.js?v=11';
+import { makeStory, QUESTS } from './story.js?v=11';
+import { MAPS } from './maps.js?v=11';
+import { AutoMap } from './automap.js?v=11';
+import { Grind } from './grind.js?v=11';
+import { HEROES, ITEMS, ENEMIES } from './data.js?v=11';
+import { BESTIARY_NEW } from './content.js?v=11';
+import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=11';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -39,6 +41,7 @@ class Game {
     document.body.classList.toggle('touchy', this.input.touchy);
     this.canvas.addEventListener('click', (e) => { if (this.tapHook) { const r = this.canvas.getBoundingClientRect(); this.tapHook(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); } });
     setHeroLook((id) => this.heroLook(id));
+    this.automap = new AutoMap(this); this.MAPS = MAPS; this.grind = null;
     this.input.on((k) => this.fieldKey(k));
     // drag on the scene (mouse, or the right side of a touch screen) to turn the camera
     { let drag = null;
@@ -75,7 +78,8 @@ class Game {
       this.draw(this.battle.scene, this.battle.camera, this.battle.portrait ? 0.45 : 0.5, this.battle.portrait ? 0.3 : 0.2, this.battle.portrait ? 1.2 : 2.0);
     } else {
       const busy = this.busy || this.mode !== 'field' || this.menuOpen;
-      this.field.update(dt, busy ? { axis: { x: 0, y: 0 }, run: false } : this.input);
+      if (this.grind && !busy && Math.hypot(this.input.axis.x, this.input.axis.y) > 0.3) this.grind.stop('你停止了自動練功');
+      this.field.update(dt, busy ? { axis: { x: 0, y: 0 }, run: false } : this.grind ? this.grind.input(dt) : this.input);
       if (this.mode === 'title') this.titleCam(dt);
       this.draw(this.field.scene, this.field.camera, this.field.world ? 0.5 : 0.52, this.field.world ? 0.2 : 0.17, this.field.world ? 2.6 : 2.3);
     }
@@ -128,15 +132,33 @@ class Game {
     this.encMul = st.enc || 1;
     this.resize();
     this.post.setPixelStyle(st.pixel ?? 0);
+    document.body.classList.toggle('nominimap', st.minimap === false);
     const dv = st.depth ?? 0; setDepth(dv || 0.6); setPaper(dv === 0); this.post.setPaper(dv === 0);
   }
 
   // ---------------------------------------------------------------- field input
   async fieldKey(k) {
     if (this.mode !== 'field' || this.busy || this.field.locked || this.menuOpen) return;
+    if (this.grind) { if (['ok', 'cancel', 'menu', 'map'].includes(k)) this.grind.stop('你停止了自動練功'); return; }
     if (k === 'ok') return this.interact();
-    if (k === 'menu') { this.menuOpen = true; await this.ui.mainMenu(); this.menuOpen = false; return; }
+    if (k === 'map') return this.openMap();
+    if (k === 'menu') { this.menuOpen = true; const act = await this.ui.mainMenu(); this.menuOpen = false; if (act === 'map') return this.openMap(); if (act === 'grind') return this.startGrind(); return; }
     if (k === 'mount') return this.toggleMount();
+  }
+  // the full map; from the world map or a town you can jump to any town you have been to
+  async openMap() {
+    if (this.mode !== 'field' || this.busy) return;
+    this.menuOpen = true; let t = null;
+    try { t = await this.automap.openFull(); } finally { this.menuOpen = false; }
+    if (t) { this.audio.sfx('flee'); await this.warp(t.to[0], t.to[1], t.to[2], t.to[3] || 'up'); this.S.lastWorld = { x: t.spot.x, z: t.spot.z + 1 }; }
+  }
+  async startGrind() {
+    const f = this.field;
+    if (!f.encTable() || f.def.town || f.def.interior) { this.ui.toast('這裡不會遇到怪物。到城外的原野或迷宮裡再開始吧'); return; }
+    this.menuOpen = true; let cfg = null;
+    try { cfg = await this.ui.grindMenu(); } finally { this.menuOpen = false; }
+    if (!cfg) return;
+    this.grind = new Grind(this, cfg); this.ui.toast('開始自動練功！點上方的橫幅或按方向鍵就會停止');
   }
   async toggleMount() {
     const f = this.field;
@@ -247,6 +269,7 @@ class Game {
     const wild = this.wildTroop(enc);
     if (wild) troop = wild;
     const res = await this.fight({ troop, bg: this.bgFor(), preemptive: Math.random() < 0.1, random: true });
+    if (this.grind) await this.grind.afterBattle(res, this.battle.lastSpoils);
     return res;
   }
   // pick monsters from the big bestiary that live on this kind of ground and fit the area's level

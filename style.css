@@ -362,3 +362,26 @@ body.portrait .chooser.small { padding-bottom: calc(150px + var(--sb)); }
   body.touchy .b-party { width: min(360px, 44vw); } body.touchy .b-pc { font-size: 14px; padding: 5px 10px; }
   body.touchy .b-cmd { min-width: 220px; }
 }
+
+/* ---------- map ---------- */
+#minimap { position: absolute; right: calc(12px + var(--sr)); top: calc(46px + var(--st)); width: 132px; height: 132px; border-radius: 50%; pointer-events: auto; cursor: pointer; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55); }
+body.nominimap #minimap { display: none; }
+.mapview { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; animation: dlgIn2 0.12s ease; }
+.mv-box { width: min(1000px, calc(100vw - 16px - var(--sl) - var(--sr))); height: min(720px, calc(100dvh - 16px - var(--st) - var(--sb))); display: flex; flex-direction: column; padding: 10px; }
+.mv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--dim); padding: 2px 6px 8px; border-bottom: 1px solid var(--line2); }
+.mv-head b { color: var(--gold); font: 700 18px var(--serif); }
+.mv-body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; margin: 6px 0; }
+.mv-body canvas { image-rendering: pixelated; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25); }
+.mv-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--dim); padding: 2px 6px 6px; }
+.mv-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, 0.6); }
+.mv-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.mv-foot button { background: linear-gradient(180deg, #3a4a8a, #1a2048); color: var(--text); border: 2px solid var(--line); border-radius: 6px; padding: 8px 18px; font-size: 15px; cursor: pointer; }
+.mv-travel { box-shadow: 0 0 10px rgba(240, 208, 128, 0.6); }
+/* ---------- auto grinding ---------- */
+.grind-banner { position: fixed; left: 50%; top: calc(10px + var(--st)); transform: translateX(-50%); z-index: 24; background: rgba(10, 14, 32, 0.9); border: 1px solid var(--gold); border-radius: 20px; padding: 6px 16px; display: flex; gap: 10px; align-items: center; font-size: 14px; cursor: pointer; white-space: nowrap; box-shadow: 0 0 14px rgba(240, 208, 128, 0.35); animation: grindPulse 1.6s ease-in-out infinite alternate; }
+.grind-banner b { color: var(--gold); } .grind-banner small { color: var(--dim); font-size: 11px; }
+body.inbattle .grind-banner { top: auto; bottom: calc(10px + var(--sb)); left: calc(10px + var(--sl)); transform: none; opacity: 0.85; }
+@keyframes grindPulse { to { box-shadow: 0 0 22px rgba(240, 208, 128, 0.7); } }
+@media (max-width: 600px) { #minimap { width: 96px; height: 96px; } .grind-banner { font-size: 12px; padding: 5px 10px; gap: 6px; } .grind-banner small { display: none; } }
+@media (max-height: 500px) { #minimap { width: 90px; height: 90px; top: calc(40px + var(--st)); } }
+@media (max-width: 600px) { #objective { max-width: calc(100vw - 130px); } }

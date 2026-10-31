@@ -1,8 +1,8 @@
 // Turns a map definition (ASCII grid + marks) into a lit 3D diorama.
-import { easeBack } from './voxel.js?v=10';
+import { easeBack } from './voxel.js?v=11';
 import * as THREE from '../lib/three.module.min.js';
-import { tileTex, propPx, propCanvas, texFrom, Px, ramp, shade, rnd, reseed, personFrame } from './pixel.js?v=10';
-import { Sprite, waterMaterial, blobShadow, spriteMaterial, depthMat } from './render.js?v=10';
+import { tileTex, propPx, propCanvas, texFrom, Px, ramp, shade, rnd, reseed, personFrame } from './pixel.js?v=11';
+import { Sprite, waterMaterial, blobShadow, spriteMaterial, depthMat } from './render.js?v=11';
 
 const LV = 0.5; // world height of one level
 // ground tile kinds by grid char

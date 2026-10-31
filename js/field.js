@@ -1,11 +1,11 @@
 // Walking around: maps, the leader sprite, NPCs, chests, doors, encounters, mounts and the camera.
 import * as THREE from '../lib/three.module.min.js';
-import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js?v=10';
-import { parseMap, buildMap, groundAt } from './mapbuild.js?v=10';
-import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js?v=10';
-import { VoxelPerson, isPaper } from './voxel.js?v=10';
-import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js?v=10';
-import { HEROES, ECHOES } from './data.js?v=10';
+import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js?v=11';
+import { parseMap, buildMap, groundAt } from './mapbuild.js?v=11';
+import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js?v=11';
+import { VoxelPerson, isPaper } from './voxel.js?v=11';
+import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js?v=11';
+import { HEROES, ECHOES } from './data.js?v=11';
 
 export const LIGHTS = {
   day: { sun: ['#fff0d8', 2.7, [0.5, 1, 0.7]], hemi: ['#c4dcff', '#8a7a5a', 1.0], exp: 1.0 },
@@ -118,6 +118,7 @@ export class Field {
     this.danger = 0;
     this.world = !!def.world;
     this.G.ui.areaName(def.name);
+    this.G.automap?.onLoad(this);
     // pop-up book: the scenery folds up from the page, spreading out from the hero
     this.popT = null;
     if (isPaper()) {
@@ -229,6 +230,7 @@ export class Field {
       if (this.mount === 'airship') p.y += ((groundAt(this.map, p.x, p.z) + 3.2) - p.y) * Math.min(1, dt * 3);
       this.syncWalker(p);
     }
+    this.G.automap?.tick(dt);
     // NPC wandering
     for (const n of this.npcs) {
       if (n.def.wander && !this.locked && !n.talking) {
@@ -315,6 +317,7 @@ export class Field {
     if (S.repel > 0) { S.repel -= d; if (S.repel <= 0) this.G.ui.toast('驅魔香的效果消失了'); return; }
     let mul = 1; for (const id of S.party) { const f = this.G.partyFx?.(id); if (f?.enc) mul += f.enc; }
     if (S.lure > 0) { S.lure -= d; mul *= 2; }
+    if (this.G.grind) mul *= 2;
     this.danger += d * (100 / (this.def.encRate || 30)) * (this.G.encMul || 1) * Math.max(0.2, mul);
     if (this.danger > 100 * (0.8 + Math.random() * 0.4) && this.danger > 70) { this.danger = 0; this.G.randomBattle(enc); }
   }

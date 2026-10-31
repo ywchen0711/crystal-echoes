@@ -1,13 +1,14 @@
 // Menus and windows: dialogue, choices, the main menu, shops, inns, notices and little overlays.
-import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js?v=10';
-import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js?v=10';
-import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js?v=10';
-import { ENEMIES } from './data.js?v=10';
-import { STATE_N, STATE_DESC, REACTIONS, PAIRS, SETS, setBonus, huntText, NEW_ECHOES } from './depth.js?v=10';
-import { monsterPx } from './pixel.js?v=10';
-import { personSheet, battleSheet } from './pixel.js?v=10';
-import { lookOf } from './field.js?v=10';
-import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js?v=10';
+import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js?v=11';
+import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js?v=11';
+import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js?v=11';
+import { ENEMIES } from './data.js?v=11';
+import { GRIND_DEFAULT, GRIND_OPTS } from './grind.js?v=11';
+import { STATE_N, STATE_DESC, REACTIONS, PAIRS, SETS, setBonus, huntText, NEW_ECHOES } from './depth.js?v=11';
+import { monsterPx } from './pixel.js?v=11';
+import { personSheet, battleSheet } from './pixel.js?v=11';
+import { lookOf } from './field.js?v=11';
+import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js?v=11';
 
 const $ = (s) => document.querySelector(s);
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -125,25 +126,15 @@ export class UI {
     let start = 0;
     for (;;) {
       this.hud();
-      const opts = ['隊伍狀態', '迴響水晶', '能力配置', '裝備', '魔法・戰技', '道具', '怪物圖鑑', '委託任務', '召喚獸', '隊伍編成', '存檔', '設定', '戰術手冊', '關閉選單'];
-      const i = await this.choose(opts.map(l => ({ label: l })), { title: `${G.mapName()}　<span class="gil">${S.gil} G</span>　<span class="tm">${fmtTime(S.time)}</span>`, info: this.partySummary(), start, cls: 'mainmenu' });
+      const save = async () => { if (G.canSave()) { G.save(); this.toast('已存檔'); G.audio.sfx('save'); } else this.toast('這裡無法存檔（請到存檔水晶旁）'); };
+      const opts = [['隊伍狀態', () => this.statusMenu()], ['迴響水晶', () => this.echoMenu()], ['能力配置', () => this.passiveMenu()], ['裝備', () => this.equipMenu()], ['魔法・戰技', () => this.magicMenu()], ['道具', () => this.itemMenu()],
+        ['地圖', 'map'], ['自動練功', 'grind'], ['怪物圖鑑', () => this.bestiaryMenu()], ['委託任務', () => this.questMenu()], ['召喚獸', () => this.summonMenu()], ['隊伍編成', () => this.formationMenu()], ['戰術手冊', () => this.tacticsMenu()], ['存檔', save], ['設定', () => this.settingsMenu()], ['關閉選單', null]];
+      const i = await this.choose(opts.map(([l]) => ({ label: l })), { title: `${G.mapName()}　<span class="gil">${S.gil} G</span>　<span class="tm">${fmtTime(S.time)}</span>`, info: this.partySummary(), start, cls: 'mainmenu' });
       start = Math.max(0, i);
-      if (i < 0 || i === 13) break;
-      try {
-        if (i === 12) await this.tacticsMenu();
-        if (i === 0) await this.statusMenu();
-        if (i === 1) await this.echoMenu();
-        if (i === 2) await this.passiveMenu();
-        if (i === 3) await this.equipMenu();
-        if (i === 4) await this.magicMenu();
-        if (i === 5) await this.itemMenu();
-        if (i === 6) await this.bestiaryMenu();
-        if (i === 7) await this.questMenu();
-        if (i === 8) await this.summonMenu();
-        if (i === 9) await this.formationMenu();
-        if (i === 10) { if (G.canSave()) { G.save(); this.toast('已存檔'); G.audio.sfx('save'); } else this.toast('這裡無法存檔（請到存檔水晶旁）'); }
-        if (i === 11) await this.settingsMenu();
-      } catch (e) { console.error(e); this.toast('這個畫面發生錯誤，已返回選單'); }
+      if (i < 0 || !opts[i][1]) break;
+      const act = opts[i][1];
+      if (typeof act === 'string') { this.hud(); return act; }
+      try { await act(); } catch (e) { console.error(e); this.toast('這個畫面發生錯誤，已返回選單'); }
     }
     this.hud();
     if (this.G.field?.player && this.G.mode === 'field') this.G.field.setLeader(S.party[0]);
@@ -334,7 +325,7 @@ export class UI {
     const S = this.S, I = ITEMS[id];
     if (!I || !I.use || I.use.dmg || I.use.escape || I.use.status && !I.use.self || I.use.analyze || I.use.cast || I.use.buff || I.use.evadeT) { if (I?.use) this.toast('戰鬥中才能使用'); return; }
     const spend = () => { S.items[id]--; if (!S.items[id]) delete S.items[id]; this.hud(); };
-    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js?v=10'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
+    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js?v=11'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
     if (I.use.meal) { S.meal = { fx: I.use.meal, n: 5, name: I.name }; spend(); this.G.audio.sfx('heal'); this.toast(`吃了${I.name}！之後5場戰鬥都有效果`); return; }
     if (I.use.repel) { S.repel = I.use.repel; S.lure = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人不會靠近了'); return; }
     if (I.use.lure) { S.lure = I.use.lure; S.repel = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人更容易出現了'); return; }
@@ -352,6 +343,31 @@ export class UI {
       if (I.use.cure || I.use.cureOnly) used = true;
     }
     if (used) { spend(); this.G.audio.sfx('heal'); } else this.G.audio.sfx('error');
+  }
+  // set up auto-grinding: when to stop, whether to use potions, battle speed
+  async grindMenu() {
+    const S = this.S; const c = S.settings.grind = { ...GRIND_DEFAULT, ...(S.settings.grind || {}) };
+    const lab = (k) => (GRIND_OPTS[k].find(o => o[0] === c[k]) || GRIND_OPTS[k][0])[1];
+    const cyc = (k, d) => { const L = GRIND_OPTS[k]; let i = Math.max(0, L.findIndex(o => o[0] === c[k])); c[k] = L[(i + d + L.length) % L.length][0]; };
+    const adj = (k, d) => { if (k === 1) cyc('hp', d); if (k === 2) cyc('battles', d); if (k === 3) cyc('lvUp', d); if (k === 4) c.heal = !c.heal; if (k === 5) c.ether = !c.ether; if (k === 6) c.speed = c.speed === 2 ? 1 : 2; };
+    const pots = Object.keys(S.items).filter(i => ITEMS[i]?.use?.heal && !ITEMS[i].use.revive).reduce((n, i) => n + S.items[i], 0);
+    let start = 0;
+    for (;;) {
+      const items = [
+        { label: '▶ 開始', desc: '主角會在附近自己走動，遇到敵人就自動戰鬥。點畫面上方的橫幅、按任何方向鍵或確定鍵就會停止。' },
+        { label: '停止條件：隊員HP', sub: lab('hp'), desc: '戰鬥結束後（用過回復藥）還是有人低於這個HP就停下來' },
+        { label: '停止條件：場數', sub: lab('battles') },
+        { label: '停止條件：等級', sub: lab('lvUp'), desc: '任何一名隊員提升到這麼多級就停下來' },
+        { label: '戰鬥後自動用回復藥', sub: c.heal ? `開（${pots}個）` : '關', desc: '從效果最小的開始用，也會用鳳凰之羽復活倒下的隊員' },
+        { label: 'MP不足時用魔力水', sub: c.ether ? '開' : '關' },
+        { label: '戰鬥速度', sub: '×' + c.speed },
+      ];
+      const i = await this.choose(items, { title: '自動練功（左右鍵調整）', start, lr: (k, d) => { adj(k, d); start = k; return 'close'; } });
+      if (i === -2) continue;
+      if (i < 0) return null;
+      if (i === 0) return c;
+      adj(i, 1); start = i;
+    }
   }
   async tacticsMenu() {
     const S = this.S;
@@ -421,6 +437,7 @@ export class UI {
         { label: '戰鬥速度', sub: '×' + (st.speed || 1) },
         { label: '文字速度', sub: (st.textSpeed || 28) <= 12 ? '快' : (st.textSpeed || 28) >= 40 ? '慢' : '普通' },
         { label: '遇敵', sub: this.G.encMul === 0.5 ? '較少' : '普通' },
+        { label: '小地圖', sub: st.minimap === false ? '關' : '開' },
       ], { title: '設定（左右鍵調整，或點兩下）', start: this._setStart || 0, lr: (k, d) => { this.adjust(k, d); this.G.applySettings(); this._setStart = k; return 'close'; } });
       if (i === -2) continue;
       if (i < 0) { this.G.applySettings(); return; }
@@ -437,6 +454,7 @@ export class UI {
     if (i === 5) st.speed = st.speed === 2 ? 1 : 2;
     if (i === 6) st.textSpeed = (st.textSpeed || 28) === 28 ? 10 : (st.textSpeed || 28) === 10 ? 45 : 28;
     if (i === 7) { this.G.encMul = this.G.encMul === 0.5 ? 1 : 0.5; st.enc = this.G.encMul; }
+    if (i === 8) st.minimap = st.minimap === false;
     this.G.applySettings();
   }
 
@@ -542,7 +560,7 @@ export class UI {
     if (S.gil < price) { await this.say('旅店老闆', '哎呀，錢好像不夠呢……', 'innkeep'); return false; }
     S.gil -= price;
     this.G.audio.music(null); await this.fade(1, 700);
-    const { healAll } = await import('./party.js?v=10'); healAll(S);
+    const { healAll } = await import('./party.js?v=11'); healAll(S);
     this.G.audio.sfx('save'); await wait(1200);
     await this.fade(0, 700); this.G.audio.music(this.G.field.def.bgm || this.G.field.theme.bgm);
     await this.say('旅店老闆', '早安！昨晚睡得好嗎？路上小心喔。', 'innkeep');

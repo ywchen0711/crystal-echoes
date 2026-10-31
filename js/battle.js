@@ -1,13 +1,13 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=10';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=10';
-import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=10';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=10';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=10';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=10';
-import { lookOf } from './field.js?v=10';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=10';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=11';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=11';
+import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=11';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=11';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=11';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=11';
+import { lookOf } from './field.js?v=11';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=11';
 
 const ENEMY_DMG = 1.55;
 const BG = {
@@ -163,7 +163,7 @@ export class Battle {
 
   // ---------------------------------------------------------------- main loop
   async run(opts) {
-    this.opts = opts; this.S = this.G.S;
+    this.opts = opts; this.S = this.G.S; this.lastSpoils = null;
     this.buildStage(opts.bg || 'field');
     this.makeUnits(opts.troop, opts);
     this.round = 0; this.result = null; this.extraUsed = false; this.summonU = null; this.log = [];
@@ -1159,13 +1159,14 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=10');
+    const { gainExp, gainBond } = await import('./party.js?v=11');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);
     const learned = gainAP(this.S, ap);
     if (this.S.meal?.n > 0) { this.S.meal.n--; if (!this.S.meal.n) this.S.meal = null; }
     this.S.battles++;
+    this.lastSpoils = { exp, gil, drops, ap, woke };
     await this.ui.results({ exp, gil, drops, ups, bond, ap, learned, woke });
     for (const eid of woke) { this.G.audio.sfx('resonance'); this.G.ui.toast(`迴響水晶「<b>${ECHOES[eid].name}</b>」甦醒了！`, 3500); }
   }
@@ -1433,6 +1434,7 @@ class BattleUI {
       this.root.appendChild(box);
       setTimeout(() => {
         const off = G.input.on((k) => { if (k === 'ok' || k === 'cancel') { off(); box.remove(); res(); } });
+        if (G.grind) setTimeout(() => { if (box.isConnected) { off(); box.remove(); res(); } }, 1100);
         box.onclick = () => { off(); box.remove(); res(); };
       }, 500);
     });

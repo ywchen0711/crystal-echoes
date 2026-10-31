@@ -124,7 +124,7 @@ export function makeStory(G) {
       G.field.removeNpc('mira_tmp'); G.field.removeNpc('syl_tmp');
       await join('mira', 1); await join('sylvie', 2);
       flag('intro_done'); G.updateObjective();
-      ui.toast('按 <b>C</b>（或右下角 ☰）打開選單', 3500);
+      ui.toast(this.G.input.touchy ? '點右下角 <b>☰</b> 打開選單' : '按 <b>C</b>（或右下角 ☰）打開選單', 3500);
       G.field.locked = false;
     },
     async lighthouse_gate() {

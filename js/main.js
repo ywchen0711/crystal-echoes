@@ -33,6 +33,8 @@ class Game {
     this.encMul = 1;
     this.last = performance.now();
     this.resize(); addEventListener('resize', () => this.resize());
+    addEventListener('orientationchange', () => setTimeout(() => this.resize(), 300));
+    window.visualViewport?.addEventListener('resize', () => this.resize());
     this.input.bindTouch(document.getElementById('touch'));
     document.body.classList.toggle('touchy', this.input.touchy);
     this.canvas.addEventListener('click', (e) => { if (this.tapHook) { const r = this.canvas.getBoundingClientRect(); this.tapHook(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); } });
@@ -52,7 +54,12 @@ class Game {
   resize() {
     const w = innerWidth, h = innerHeight;
     this.renderer.setSize(w, h, false);
-    for (const c of [this.field.camera, this.battle.camera]) { c.aspect = w / h; c.fov = w / h < 1.2 ? 44 : 32; c.updateProjectionMatrix(); }
+    const a = w / h;
+    for (const c of [this.field.camera, this.battle.camera]) { c.aspect = a; c.fov = a < 1.2 ? 44 : 32; c.updateProjectionMatrix(); }
+    // portrait screens: the field camera pulls back, the battle is seen from behind the party
+    this.field.fit = a < 1 ? 1 + (1 - a) * 0.75 : 1;
+    this.battle.portrait = a < 0.9; this.battle.fit = a < 0.9 ? Math.max(1, 0.62 / a) ** 0.55 : 1;
+    document.body.classList.toggle('portrait', a < 0.9);
     this.post?.setSize(w, h);
   }
   frame() { return new Promise(r => this.frameWaiters.push(r)); }
@@ -65,7 +72,7 @@ class Game {
     for (const w of ws) w(dt);
     if (this.mode === 'battle') {
       this.battle.update(dt);
-      this.draw(this.battle.scene, this.battle.camera, 0.5, 0.2, 2.0);
+      this.draw(this.battle.scene, this.battle.camera, this.battle.portrait ? 0.45 : 0.5, this.battle.portrait ? 0.3 : 0.2, this.battle.portrait ? 1.2 : 2.0);
     } else {
       const busy = this.busy || this.mode !== 'field' || this.menuOpen;
       this.field.update(dt, busy ? { axis: { x: 0, y: 0 }, run: false } : this.input);

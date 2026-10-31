@@ -5,7 +5,7 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: var(--text); font-family: var(--font); user-select: none; -webkit-user-select: none; touch-action: none; }
-#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 button { font-family: inherit; }
 
 /* ---------- panels ---------- */
@@ -266,3 +266,99 @@ body.inbattle .tb-b { right: auto; left: 0; bottom: 0; width: 64px; height: 64px
 .pd-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; } .pd-row figure { margin: 0; text-align: center; } .pd-row img { width: 72px; height: 114px; image-rendering: pixelated; object-fit: contain; background: radial-gradient(circle at 50% 70%, rgba(255,255,255,0.12), transparent 70%); border-radius: 6px; } .pd-row figcaption { font-size: 11px; color: var(--dim); } .pd-row span { color: var(--dim); }
 
 .gi-pic { float: right; width: 96px; height: 96px; object-fit: contain; image-rendering: pixelated; margin: 0 0 4px 8px; background: radial-gradient(circle, rgba(255,255,255,0.12), transparent 70%); border-radius: 8px; }
+
+
+/* ================================================================ phones and tablets */
+:root { --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); }
+.tt-help .tc { display: none; }
+body.touchy .tt-help .kb { display: none; } body.touchy .tt-help .tc { display: inline; }
+.tt-help { bottom: calc(18px + var(--sb)); left: 16px; right: 16px; }
+/* keep clear of the notch and the home bar */
+#objective { left: calc(12px + var(--sl)); top: calc(12px + var(--st)); }
+#danger { right: calc(14px + var(--sr)); top: calc(12px + var(--st)); }
+#hudbottom { left: calc(10px + var(--sl)); bottom: calc(10px + var(--sb)); }
+#dialog { bottom: calc(18px + var(--sb)); width: min(880px, calc(100vw - 24px - var(--sl) - var(--sr))); }
+#toasts { top: calc(54px + var(--st)); width: max-content; max-width: calc(100vw - 24px); }
+.ch-box { max-height: calc(100dvh - 30px - var(--st) - var(--sb)); }
+.chooser.wide .ch-box { height: min(640px, calc(100dvh - 30px - var(--st) - var(--sb))); width: min(980px, calc(100vw - 20px - var(--sl) - var(--sr))); }
+.b-top { top: calc(8px + var(--st)); }
+.b-tools { right: calc(10px + var(--sr)); top: calc(52px + var(--st)); }
+.b-party { right: calc(10px + var(--sr)); bottom: calc(10px + var(--sb)); }
+.b-cmd { left: calc(10px + var(--sl)); bottom: calc(10px + var(--sb)); }
+.tbtns { right: calc(16px + var(--sr)); bottom: calc(16px + var(--sb)); }
+
+/* touch controls step aside on the title, in menus and while someone is talking (those are tapped directly) */
+body.attitle #touch, body:has(#title.on) #touch { display: none; }
+body:has(#ui .chooser) .tbtns, body:has(#dialog.on) .tbtns, body:has(.b-result) .tbtns { display: none; }
+body:has(#dialog.on) #tzone, body:has(#ui .chooser) #tzone { display: none; }
+#dialog { z-index: 26; }
+/* in battle only a small cancel button is needed: commands and targets are tapped */
+body.inbattle .tb-a { display: none; }
+body.inbattle .tbtns { top: auto; left: auto; right: calc(12px + var(--sr)); bottom: calc(50% - 30px); width: 56px; height: 56px; }
+body.inbattle .tb-b { left: auto; right: 0; bottom: 0; width: 52px; height: 52px; font-size: 18px; }
+/* bigger tap targets in lists */
+body.touchy .ch-it { min-height: 40px; }
+body.touchy .bc-it { min-height: 38px; align-items: center; }
+body.touchy .ch-back, body.touchy .bc-back { font-size: 15px; padding: 8px 12px; }
+
+/* ---------- phones held upright ---------- */
+@media (max-width: 600px) {
+  #area { font-size: 26px; letter-spacing: 3px; }
+  #objective { max-width: calc(100vw - 70px); }
+  #hudparty { flex-direction: column; gap: 3px; }
+  .hp-mini .bar { width: 36px; }
+  #dialog { padding: 10px 12px; min-height: 96px; gap: 10px; }
+  .dl-text { font-size: 15px; line-height: 1.55; min-height: 46px; } .dl-name { font-size: 14px; } .dl-face { width: 48px; height: 44px; }
+  #dialog.narr .dl-text { font-size: 16px; }
+  .ch-box { padding: 8px; } .ch-it { font-size: 15px; padding: 7px 10px; }
+  .chooser.wide .ch-list { max-height: 44dvh; }
+  .chooser.wide .ch-info { min-height: 0; }
+  .ch-info { font-size: 13px; padding: 8px; }
+  .chooser.small { padding: 0 12px calc(130px + var(--sb)) 0; }
+  .st { flex-direction: row; gap: 8px; } .st-big { width: 56px; height: 90px; }
+  .pd-row img { width: 56px; height: 88px; } .gi-pic { width: 64px; height: 64px; }
+  .b-party { width: min(250px, 60vw); } .b-pn { width: 52px; font-size: 12px; }
+  .b-cmd { max-width: 46vw; min-width: 140px; padding: 6px; } .bc-it { font-size: 14px; padding: 5px 8px; } .bc-list { max-height: 40dvh; }
+  .b-tl { padding: 4px 8px; } .ti { width: 24px; height: 24px; font-size: 12px; } .tl-l { display: none; }
+  .b-msg { font-size: 16px; }
+  .bb-in { padding: 8px 30px; } .bb-in b { font-size: 28px; } .cut-txt b { font-size: 32px; }
+  .b-result { padding: 14px 16px; } .b-result h3 { font-size: 22px; }
+  .tt-menu { min-width: 200px; }
+  .tb { width: 58px; height: 58px; font-size: 19px; } .tb-a { width: 68px; height: 68px; } .tb-b { right: 76px; }
+  .tbtns { width: 170px; height: 160px; }
+}
+/* battle on an upright phone: party cards along the bottom, commands above them */
+body.portrait .b-party { left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); width: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+body.portrait .b-pc.cur { transform: translateY(-4px); }
+body.portrait .b-cmd { bottom: calc(var(--party-h, 96px) + 18px + var(--sb)); max-width: 62vw; }
+body.portrait .b-cmd .bc-list { max-height: 32dvh; }
+body.portrait .b-tools { top: calc(48px + var(--st)); }
+body.portrait .chooser.small { padding-bottom: calc(150px + var(--sb)); }
+
+/* ---------- phones held sideways (short screens) ---------- */
+@media (max-height: 500px) {
+  #area { font-size: 24px; top: 12%; }
+  #dialog { min-height: 84px; padding: 8px 14px; bottom: calc(8px + var(--sb)); }
+  .dl-text { font-size: 15px; line-height: 1.5; min-height: 44px; } .dl-face { width: 52px; height: 46px; }
+  .ch-box { padding: 8px; } .ch-title { padding-bottom: 5px; margin-bottom: 5px; font-size: 15px; }
+  .ch-it { padding: 5px 10px; font-size: 15px; } body.touchy .ch-it { min-height: 34px; }
+  .ch-list { max-height: calc(100dvh - 90px); }
+  .chooser.small { padding: 0 calc(16px + var(--sr)) calc(12px + var(--sb)) 0; }
+  .b-pc { padding: 2px 8px; } .b-party { gap: 2px; }
+  .b-cmd .bc-list { max-height: 52dvh; } body.touchy .bc-it { min-height: 32px; }
+  .b-msg { font-size: 16px; margin-top: 4px; }
+  .b-tools { top: calc(44px + var(--st)); }
+  .tt-logo { margin-bottom: 14px; } .tt-logo h1 { font-size: 44px; } .tt-gem { width: 28px; height: 44px; margin-bottom: 4px; }
+  .tt-help { bottom: calc(6px + var(--sb)); font-size: 12px; }
+  .tb { width: 56px; height: 56px; } .tb-a { width: 66px; height: 66px; bottom: 20px; } .tb-b { right: 74px; } .tb-menu { bottom: 96px; } .tb-mount { bottom: 92px; right: 60px; }
+  .b-result { max-height: calc(100dvh - 20px); overflow-y: auto; }
+}
+/* ---------- tablets: a touch larger so it reads at arm's length ---------- */
+@media (min-width: 768px) and (min-height: 700px) {
+  body.touchy .ch-it { font-size: 17px; padding: 9px 14px; }
+  body.touchy .bc-it { font-size: 17px; }
+  body.touchy .ch-info { font-size: 15px; }
+  body.touchy .dl-text { font-size: 21px; }
+  body.touchy .b-party { width: min(360px, 44vw); } body.touchy .b-pc { font-size: 14px; padding: 5px 10px; }
+  body.touchy .b-cmd { min-width: 220px; }
+}

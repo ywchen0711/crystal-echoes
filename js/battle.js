@@ -928,8 +928,15 @@ export class Battle {
     const intro = this.camIntro ? 1.3 : 1;
     { const d = fx - (this.camX ?? 0); this.camX = Math.abs(d) < 0.002 ? fx : (this.camX ?? 0) + d * Math.min(1, dt * 3); }
     const shake = this.camShake > 0 ? (this.camShake -= dt, (Math.random() - 0.5) * this.camShake * 0.6) : 0;
-    this.camera.position.set(this.camX + shake + 0.4, 5.2 * zoom * intro, 14.5 * zoom * intro);
-    this.camera.lookAt(this.camX * 0.6, -0.2, 0);
+    if (this.portrait) {
+      // tall screens: look over the party's shoulders at the foes, so the line of battle runs up the screen
+      const yaw = 1.45, D = 15.5 * zoom * intro * (this.fit || 1), tx = this.camX * 0.3 - 0.8;
+      this.camera.position.set(tx + Math.sin(yaw) * D + shake, 8.6 * zoom * intro * (this.fit || 1), Math.cos(yaw) * D);
+      this.camera.lookAt(tx, -1.4, 0);
+    } else {
+      this.camera.position.set(this.camX + shake + 0.4, 5.2 * zoom * intro, 14.5 * zoom * intro);
+      this.camera.lookAt(this.camX * 0.6, -0.2, 0);
+    }
     this.flashLight.intensity *= Math.exp(-dt * 8);
     const gu = this.G.post.grade.uniforms; gu.flash.value *= Math.exp(-dt * 6);
     this.fx.update(dt);

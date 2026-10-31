@@ -5,7 +5,7 @@ import { RenderPass } from '../lib/addons/RenderPass.js';
 import { UnrealBloomPass } from '../lib/addons/UnrealBloomPass.js';
 import { OutputPass } from '../lib/addons/OutputPass.js';
 import { ShaderPass } from '../lib/addons/ShaderPass.js';
-import { texFrom } from './pixel.js?v=11';
+import { texFrom } from './pixel.js?v=12';
 import { Pass, FullScreenQuad } from '../lib/addons/Pass.js';
 
 // characters and monsters live on their own layer so they can be drawn as crisp, outlined pixel art

@@ -385,3 +385,6 @@ body.inbattle .grind-banner { top: auto; bottom: calc(10px + var(--sb)); left: c
 @media (max-width: 600px) { #minimap { width: 96px; height: 96px; } .grind-banner { font-size: 12px; padding: 5px 10px; gap: 6px; } .grind-banner small { display: none; } }
 @media (max-height: 500px) { #minimap { width: 90px; height: 90px; top: calc(40px + var(--st)); } }
 @media (max-width: 600px) { #objective { max-width: calc(100vw - 130px); } }
+
+.ch-desc.keep { min-height: 5em; }
+.grindmenu .ch-box { width: min(500px, calc(100vw - 20px)); } .grindmenu .ch-list { width: 100%; } .grindmenu .ch-it .ch-s { min-width: 9em; text-align: right; }

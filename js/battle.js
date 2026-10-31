@@ -1,13 +1,13 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=11';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=11';
-import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=11';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=11';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=11';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=11';
-import { lookOf } from './field.js?v=11';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=11';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=12';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=12';
+import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=12';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=12';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=12';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=12';
+import { lookOf } from './field.js?v=12';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=12';
 
 const ENEMY_DMG = 1.55;
 const BG = {
@@ -1159,7 +1159,7 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=11');
+    const { gainExp, gainBond } = await import('./party.js?v=12');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);

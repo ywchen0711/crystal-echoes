@@ -1,8 +1,8 @@
 // Generated content: weapon types with their own battle rules, 1000+ pieces of equipment with effects,
 // 400 spells, 500 items and the weapon arts. Everything is built from tables so it stays consistent.
-import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=11';
-import { BESTIARY_NEW } from './monsters.js?v=11';
-import { applyDepth } from './depth.js?v=11';
+import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=12';
+import { BESTIARY_NEW } from './monsters.js?v=12';
+import { applyDepth } from './depth.js?v=12';
 export { BESTIARY_NEW };
 
 export const ELS = ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'];

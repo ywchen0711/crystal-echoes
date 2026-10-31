@@ -1,7 +1,7 @@
 // The story, every conversation, side quests, sanctum trials, minigames and the shops' stock.
-import { HEROES, ECHOES, SKILLS, ITEMS, GEAR, ENEMIES, ARENA, SUMMONS } from './data.js?v=8';
-import { addHero, addEcho, setEcho, addItem, itemName, healAll, heroStats } from './party.js?v=8';
-import { GEAR_BY_TIER, SPELLS } from './content.js?v=8';
+import { HEROES, ECHOES, SKILLS, ITEMS, GEAR, ENEMIES, ARENA, SUMMONS } from './data.js?v=10';
+import { addHero, addEcho, setEcho, addItem, itemName, healAll, heroStats } from './party.js?v=10';
+import { GEAR_BY_TIER, SPELLS } from './content.js?v=10';
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -124,7 +124,7 @@ export function makeStory(G) {
       G.field.removeNpc('mira_tmp'); G.field.removeNpc('syl_tmp');
       await join('mira', 1); await join('sylvie', 2);
       flag('intro_done'); G.updateObjective();
-      ui.toast(this.G.input.touchy ? '點右下角 <b>☰</b> 打開選單' : '按 <b>C</b>（或右下角 ☰）打開選單', 3500);
+      ui.toast(G.input.touchy ? '點右下角 <b>☰</b> 打開選單' : '按 <b>C</b>（或右下角 ☰）打開選單', 3500);
       G.field.locked = false;
     },
     async lighthouse_gate() {

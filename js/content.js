@@ -1,7 +1,8 @@
 // Generated content: weapon types with their own battle rules, 1000+ pieces of equipment with effects,
 // 400 spells, 500 items and the weapon arts. Everything is built from tables so it stays consistent.
-import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=8';
-import { BESTIARY_NEW } from './monsters.js?v=8';
+import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=10';
+import { BESTIARY_NEW } from './monsters.js?v=10';
+import { applyDepth } from './depth.js?v=10';
 export { BESTIARY_NEW };
 
 export const ELS = ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'];
@@ -518,6 +519,7 @@ function processEnemies() {
   }
 }
 processEnemies();
+applyDepth({ GEAR_BY_TIER, TRAIT_N, STATUS_N, STATUS_S, put });
 export const ENEMY_COUNT = Object.keys(ENEMIES).length;
 
 // describe an equipment piece's effects in plain words
@@ -538,6 +540,10 @@ export function fxText(fx) {
   if (fx.hpP) o.push(`HP+${Math.round(fx.hpP * 100)}%`); if (fx.mpP) o.push(`MP+${Math.round(fx.mpP * 100)}%`); if (fx.mpregen) o.push('每回合回MP'); if (fx.survive) o.push('不屈'); if (fx.cover) o.push('保護瀕死隊友');
   if (fx.limitup) o.push(`極限+${Math.round(fx.limitup * 100)}%`); if (fx.healup) o.push(`回復+${Math.round(fx.healup * 100)}%`); if (fx.steal) o.push(`偷竊+${Math.round(fx.steal * 100)}%`);
   if (fx.exp) o.push(`經驗+${Math.round(fx.exp * 100)}%`); if (fx.gil) o.push(`金幣+${Math.round(fx.gil * 100)}%`); if (fx.drop) o.push(`掉寶+${Math.round(fx.drop * 100)}%`); if (fx.ap) o.push(`AP+${Math.round(fx.ap * 100)}%`);
+  if (fx.elUp) for (const [e, v] of Object.entries(fx.elUp)) o.push(`${ELEM[e]}屬性傷害+${Math.round(v * 100)}%`);
+  if (fx.burnAmp) o.push('燃燒傷害×2'); if (fx.spreadBurn) o.push('燃燒會蔓延'); if (fx.wetAll) o.push('水屬性讓全體濕潤'); if (fx.wetAmp) o.push(`濕潤的敵人受傷+${Math.round(fx.wetAmp * 100)}%`);
+  if (fx.shockStun) o.push('感電必定暈眩'); if (fx.chainT) o.push('雷屬性連鎖'); if (fx.antiUndying) o.push('阻止不死復活'); if (fx.killHeal) o.push(`擊倒時回復${Math.round(fx.killHeal * 100)}%HP`);
+  if (fx.dodgeCounter) o.push('閃避後反擊'); if (fx.blockUp) o.push(`格擋+${Math.round(fx.blockUp * 100)}%`); if (fx.dualcast) o.push(`${Math.round(fx.dualcast * 100)}%連續詠唱`); if (fx.revealHit) o.push('命中時發現弱點'); if (fx.markAmp) o.push(`印記傷害+${Math.round(fx.markAmp * 100)}%`);
   if (fx.enc) o.push(fx.enc < 0 ? `遇敵-${Math.round(-fx.enc * 100)}%` : `遇敵+${Math.round(fx.enc * 100)}%`);
   return o;
 }

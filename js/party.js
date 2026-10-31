@@ -1,6 +1,7 @@
 // The save state and everything derived from it: stats, skills, echoes, levels, items.
-import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, EXP_NEXT, AP_CAP, BOND_EXP, STAR_COST, SUMMONS, ECHO_ORDER } from './data.js?v=8';
-import { APT, WTYPES, ARTS_BY_TYPE, MASTERY_AT, mergeFx } from './content.js?v=8';
+import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, EXP_NEXT, AP_CAP, BOND_EXP, STAR_COST, SUMMONS, ECHO_ORDER } from './data.js?v=10';
+import { APT, WTYPES, ARTS_BY_TYPE, MASTERY_AT, mergeFx } from './content.js?v=10';
+import { setBonus } from './depth.js?v=10';
 
 export const EQUIP_SLOTS = ['R', 'L', 'head', 'body', 'arms', 'waist', 'legs', 'feet', 'back', 'acc1', 'acc2'];
 export const SLOT_N = { R: '右手', L: '左手', head: '頭', body: '身體', arms: '手', waist: '腰', legs: '腿', feet: '腳', back: '背', acc1: '飾品1', acc2: '飾品2' };
@@ -60,6 +61,7 @@ export function shieldOf(S, id) { const h = S.heroes[id]; return [GEAR[h.equip.L
 export function gearFx(S, id, statsOnly) {
   const h = S.heroes[id]; let fx = {};
   for (const slot of EQUIP_SLOTS) { const g = GEAR[h.equip[slot]]; if (!g?.fx) continue; const f = { ...g.fx }; if ((slot === 'R' || slot === 'L') && g.type !== 'shield') { delete f.el; delete f.onHit; } fx = mergeFx(fx, f); }
+  for (const f of setBonus(EQUIP_SLOTS.map(sl => h.equip[sl]).filter(Boolean)).fx) fx = mergeFx(fx, f);
   if (!statsOnly && S.meal?.n > 0) fx = mergeFx(fx, Object.fromEntries(Object.entries(S.meal.fx).filter(([k]) => !['start', 'limit'].includes(k))));
   return fx;
 }

@@ -1,12 +1,13 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=8';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=8';
-import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=8';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=8';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP } from './party.js?v=8';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=8';
-import { lookOf } from './field.js?v=8';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=10';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=10';
+import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=10';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=10';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=10';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=10';
+import { lookOf } from './field.js?v=10';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=10';
 
 const ENEMY_DMG = 1.55;
 const BG = {
@@ -86,6 +87,9 @@ export class Battle {
       const spr = new VoxelPerson(look, { scale: 1.25, battle: true, angle: -Math.PI / 2 + 0.45, glow: 0.12 });
       const fx = gearFx(this.S, id), hs = hands(this.S, id), shields = shieldOf(this.S, id);
       const u = { side: 'party', id, name: HEROES[id].name, hero: id, lv: h.lv, st, hp: Math.max(0, Math.min(h.hp, st.hp)), mp: Math.min(h.mp, st.mp), wpn: hs[0].type, hands: hs, fx, on: h.on || [], echo: h.echo, limit: h.limit || 0, buffs: {}, status: {}, spr, home: slots[i], survived: false, color: HEROES[id].color, immuneSet: new Set(fx.immune || []), block: Math.min(0.6, shields.reduce((a, g) => a + (g.fx?.block || 0), 0)), mblock: shields.reduce((a, g) => a + (g.fx?.mblock || 0), 0), barrier: {} };
+      u.key = h.echo ? ECHOES[h.echo]?.key : null;
+      if (u.key === 'aegisheart' && shields.length) u.block += 0.15;
+      u.block += fx.blockUp || 0;
       if (fx.first >= 1 || (fx.first && Math.random() < fx.first)) u.firstStrike = true;
       u.alive = u.hp > 0;
       this.addSprite(u, slots[i][0], slots[i][1]); spr.popDelay = 0.25 + i * 0.09;
@@ -100,17 +104,50 @@ export class Battle {
     const eslots = n === 1 ? [[-3.8, 0]] : n === 2 ? [[-2.9, -1.4], [-5.0, 1.0]] : n === 3 ? [[-2.4, -1.9], [-5.4, -0.6], [-3.2, 1.6]] : [[-2.2, -2.0], [-5.0, -1.3], [-2.6, 0.9], [-5.4, 1.9]];
     const letters = 'ABCD'; const count = {};
     troop.forEach((eid, i) => {
-      const E = ENEMIES[eid]; count[eid] = (count[eid] || 0) + 1;
-      let px = monsterPx(E.kind, E.colors); if (E.kind !== 'knight') px = px.flip();
-      const scale = (E.boss ? 1.25 : 1.05) * (E.scale || 1);
-      const spr = new VoxelSprite(px, { scale });
-      const st = { hp: E.hp, mp: 999, atk: E.atk, def: E.def, mag: E.mag, spr: E.spr, spd: E.spd };
-      if (opts.hard) for (const k of ['hp', 'atk', 'def', 'mag', 'spr']) st[k] = Math.round(st[k] * opts.hard);
-      const u = { side: 'enemy', fam: E.fam, traits: new Set(E.traits || []), barrier: {}, id: eid, E, name: E.name + (troop.filter(t => t === eid).length > 1 ? letters[count[eid] - 1] : ''), lv: E.lv, st, hp: st.hp, mp: 999, shield: E.shield, maxShield: E.shield, weak: E.weak, resist: E.resist || [], revealed: new Set(this.S.flags['seen_' + eid] || []), buffs: {}, status: {}, spr, alive: true, broken: false, brokenUntil: -1, boss: !!E.boss, home: eslots[i] };
-      this.addSprite(u, eslots[i][0], eslots[i][1]); spr.popDelay = 0.05 + i * 0.09;
-      this.units.push(u);
+      count[eid] = (count[eid] || 0) + 1;
+      const u = this.makeEnemy(eid, eslots[i], troop.filter(t => t === eid).length > 1 ? letters[count[eid] - 1] : '', opts);
+      u.spr.popDelay = 0.05 + i * 0.09;
     });
+    // echo pairs and battle-wide keystone effects
+    this.rewindUsed = false; this.delayed = []; this.zone = null;
+    this.pairList = pairsOf(this.party.map(u => u.echo)); this.pairs = new Set(this.pairList.map(p => p[2]));
+    for (const u of this.party) {
+      if (this.pairs.has('twinwall')) u.block += 0.1;
+      if (this.pairs.has('twins')) u.firstStrike = true;
+      if (this.pairs.has('timesong')) u.status.haste = 4;
+    }
   }
+  makeEnemy(eid, pos, suffix = '', opts = {}) {
+    const E = ENEMIES[eid];
+    let px = monsterPx(E.kind, E.colors); if (E.kind !== 'knight') px = px.flip();
+    const scale = (E.boss ? 1.25 : 1.05) * (E.scale || 1);
+    const spr = new VoxelSprite(px, { scale });
+    const st = { hp: E.hp, mp: 999, atk: E.atk, def: E.def, mag: E.mag, spr: E.spr, spd: E.spd };
+    if (opts.hard) for (const k of ['hp', 'atk', 'def', 'mag', 'spr']) st[k] = Math.round(st[k] * opts.hard);
+    const u = { side: 'enemy', fam: E.fam, traits: new Set(E.traits || []), barrier: {}, id: eid, E, name: E.name + suffix, lv: E.lv, st, hp: st.hp, mp: 999, shield: E.shield, maxShield: E.shield, weak: E.weak, resist: E.resist || [], revealed: new Set(this.S.flags['seen_' + eid] || []), buffs: {}, status: {}, spr, alive: true, broken: false, brokenUntil: -1, boss: !!E.boss, home: pos };
+    if (u.traits.has('reflect')) u.status.reflect = 99;
+    if (u.traits.has('stealth')) u.status.hidden = 99;
+    u.aura = E.aura; u.absorb = E.absorb || [];
+    this.addSprite(u, pos[0], pos[1]);
+    this.units.push(u);
+    return u;
+  }
+  // a summoner calls a weaker member of its family onto a free spot
+  async spawnMinion(s) {
+    const spots = [[-2.2, -2.0], [-5.0, -1.3], [-2.6, 0.9], [-5.4, 1.9], [-3.8, 0]];
+    const free = spots.find(p => !this.foes.some(f => Math.hypot(f.home[0] - p[0], f.home[1] - p[1]) < 1.2));
+    if (!free) return;
+    const pool = Object.keys(ENEMIES).filter(id => { const E = ENEMIES[id]; return E.wild && !E.metal && !E.boss && E.fam === s.fam && E.lv <= s.lv - 2 && E.lv >= s.lv - 14 && !E.traits?.includes('summoner'); });
+    if (!pool.length) return;
+    const id = pool[Math.random() * pool.length | 0];
+    this.pop(s, '呼叫同伴！', '#ffb04a', true); this.G.audio.sfx('summon');
+    const m = this.makeEnemy(id, free, '');
+    this.fx.emit({ x: m.x, y: 1, z: m.z, n: 30, color: '#c8a0ff', speed: 2, life: 0.8, size: 0.25 });
+    this.ui.addEnemy(m); this.ui.refresh();
+    await wait(500);
+  }
+  hasKey(k) { return this.allies.some(a => a.key === k); }
+  debuffCount(t) { return Object.keys(t.status).filter(k => !['regen', 'haste', 'reflect', 'reraise', 'hidden', 'enraged'].includes(k)).length + Object.values(t.buffs).filter(b => b.v < 0).length; }
   addSprite(u, x, z) {
     u.spr.mesh.position.set(x, 0, z); if (!u.spr.voxel) u.spr.mesh.rotation.x = -0.12; else if (u.side === 'enemy') u.spr.mesh.rotation.y = 0.4;
     u.shadow = blobShadow(u.side === 'enemy' ? 0.3 * u.spr.w : 0.5); u.shadow.position.set(x, 0.02, z);
@@ -137,6 +174,7 @@ export class Battle {
     this.active = true;
     await this.intro();
     if (opts.preemptive) this.msg('先制攻擊！');
+    if (this.pairList.length) { this.msg('連攜：' + this.pairList.map(p => p[3]).join('・')); await wait(700); }
     while (!this.result) {
       this.round++;
       await this.doRound();
@@ -161,7 +199,7 @@ export class Battle {
     await wait(500);
   }
 
-  speedOf(u) { return u.st.spd * this.bmul(u, 'spd') * (u.status.slow ? 0.5 : 1) * (u.status.haste ? 1.5 : 1) * (this.zone?.haste && u.side === 'party' ? 1.3 : 1); }
+  speedOf(u) { return u.st.spd * this.bmul(u, 'spd') * (u.status.slow ? 0.5 : 1) * (u.status.chill ? 0.7 : 1) * (u.status.haste ? 1.5 : 1) * (this.zone?.haste && u.side === 'party' ? 1.3 : 1); }
   computeOrder(jitter = true) {
     const list = this.units.filter(u => u.alive && !(u.side === 'enemy' && u.brokenUntil >= this.round));
     if (this.summonU) list.push(this.summonU);
@@ -233,6 +271,15 @@ export class Battle {
       u.defending = false; u.stance = null; u.parry = false;
       if (u.side === 'enemy' && u.broken && this.round >= u.brokenUntil) { u.broken = false; u.shield = u.maxShield; this.pop(u, '恢復', '#8ae0ff'); }
     }
+    for (const u of this.units.filter(u => u.alive && u.side === 'enemy')) {
+      if (u.status.burn) { const amp = (u.burnBy?.key === 'inferno' ? 2 : 1) * (u.burnBy?.fx?.burnAmp ? 2 : 1); this.damage(u, Math.max(1, Math.round(u.st.hp * (u.boss ? 0.015 : 0.04) * amp)), { color: '#ff8a3a' }); }
+      if (u.traits.has('regen') && !u.status.burn && !u.status.poison && !u.noRegen && u.hp > 0 && u.hp < u.st.hp) this.heal(u, Math.round(u.st.hp * (u.boss ? 0.03 : 0.08)));
+      if (u.noRegen) u.noRegen--;
+      for (const k of ['wet', 'burn', 'chill', 'mud', 'erosion']) if (u.status[k]) { u.status[k]--; if (!u.status[k]) delete u.status[k]; }
+    }
+    for (const a of this.allies) a.shadowUsed = false;
+    if (this.zone?.ley) { const k = STATE_OF[this.zone.el] || (this.zone.el === 'earth' ? 'mud' : null); if (k) for (const f of this.foes) this.setState(f, k, 2, this.zone.by); }
+    if (this.round % 2 === 0) for (const s of this.foes.filter(f => f.traits.has('summoner') && !f.broken)) { if (this.foes.length >= 4) break; await this.spawnMinion(s); }
     if (this.zone && --this.zone.t <= 0) { this.msg('領域消失了'); this.zone = null; }
     this.checkDeaths();
     await wait(200);
@@ -245,6 +292,7 @@ export class Battle {
   async turn(u) {
     if (u.side === 'summon') return this.summonTurn(u);
     if (u.status.stop) { this.pop(u, '停止中', '#a0a0ff'); await wait(380); return; }
+    if (u.status.frozen) { if (!--u.status.frozen) delete u.status.frozen; this.pop(u, '凍結中', '#bfe8ff'); await wait(380); return; }
     if (u.status.stun) { delete u.status.stun; this.pop(u, '暈眩中', '#ffd04a'); await wait(380); return; }
     if (u.status.sleep) {
       u.status.sleep--; this.pop(u, 'Zzz', '#c8c8ff'); await wait(450);
@@ -379,7 +427,7 @@ export class Battle {
     await this.afterAction(u);
   }
   async afterAction(u) {
-    if (this.counterQ) { const [c, tgt] = this.counterQ; this.counterQ = null; if (c.alive && tgt.alive) { this.pop(c, '反擊！', '#ffb04a'); if (c.side === 'party') await this.weaponAttack(c, tgt, { counter: true, quiet: true }); else await this.useSkill(c, 'attack', [tgt], { counter: true, quiet: true }); } }
+    if (this.counterQ) { const [c, tgt] = this.counterQ; this.counterQ = null; if (c.alive && tgt.alive) { this.pop(c, '反擊！', '#ffb04a'); if (c.side === 'party') { c._counterNow = true; await this.weaponAttack(c, tgt, { counter: true, quiet: true }); c._counterNow = false; } else await this.useSkill(c, 'attack', [tgt], { counter: true, quiet: true }); } }
   }
 
   // ---------------------------------------------------------------- the heart: using a skill
@@ -395,6 +443,7 @@ export class Battle {
       if (S.hpCost) u.hp = Math.max(1, Math.round(u.hp - u.st.hp * S.hpCost));
     }
     if (sid !== 'attack' && !o.quiet) this.msg(S.name);
+    this.curActor = u;
     if (u.side === 'party' && S.art) this.addMastery(u, S.art, 1);
     // jumps leave the field until the next round
     if (S.jump && !o.landing) {
@@ -408,7 +457,7 @@ export class Battle {
     if (S.stance) { u.stance = S.stance; this.pop(u, { parry: '招架架式', counter: '明鏡止水', cover: '掩護', wall: '鐵壁' }[S.stance], '#8ac8ff'); }
     if (S.amp) { u.amp = S.amp; this.pop(u, '魔力增幅', '#c8a0ff'); }
     if (S.dualNext) { u.dualNext = true; this.pop(u, '雙重詠唱準備', '#c8a0ff'); }
-    if (S.field) { this.zone = S.field === 'haste' ? { haste: true, t: 3 } : { el: S.field, t: 3 }; this.banner2(S.field === 'haste' ? '加速陣' : ELEM[S.field] + '之領域'); }
+    if (S.field) { this.zone = S.field === 'haste' ? { haste: true, t: 3 } : { el: S.field, t: u.key === 'leyline' ? 5 : 3, ley: u.key === 'leyline', by: u }; this.banner2(S.field === 'haste' ? '加速陣' : ELEM[S.field] + '之領域'); }
     if (S.flee100) { if (this.units.some(x => x.boss) || this.opts.noFlee) { this.msg('無法逃走！'); } else { this.msg('瞬間移動！'); await wait(400); this.result = 'flee'; return; } }
     if (S.dropUp) { this.dropBonus = (this.dropBonus || 0) + 0.5; this.pop(u, '掉寶率提升', '#ffe04a'); }
     if (S.hp2mp) { const c = Math.round(u.st.hp * 0.25); if (u.hp > c) { u.hp -= c; u.mp = Math.min(u.st.mp, u.mp + c); this.number(u, c, '#8ac8ff', {}); } }
@@ -435,6 +484,8 @@ export class Battle {
         if (S.burst) { const n = Object.keys(tgt.status).filter(k => !['regen', 'haste', 'reflect', 'reraise'].includes(k)).length + Object.values(tgt.buffs).filter(b => b.v < 0).length; pow *= 1 + 0.6 * n; if (n) { this.pop(tgt, `引爆 ×${n}`, '#ff8a3a'); tgt.status = {}; for (const b in tgt.buffs) if (tgt.buffs[b].v < 0) delete tgt.buffs[b]; } }
         const dmg = await this.strike(u, tgt, { ...S, pow }, tags, { atk: S.byDef ? undefined : (S.art ? this.atkFor(u, S.art) : undefined), fast: hits > 2 });
         total += dmg;
+        if (o.landing && u.key === 'dragoon' && tgt.alive && tgt.side === 'enemy') { if (tgt.traits?.has('fly')) { tgt.grounded = 2; this.pop(tgt, '墜落！', '#ffb04a'); } await this.breakHit(tgt, 1); }
+        if (S.markWeak && tgt.alive) { const el = this.elOf(tgt); tgt.mark = { el, t: 3 }; this.pop(tgt, ELEM[el] + '之印', ELEM_COLOR[el]); }
         // chains bounce to other enemies
         if (S.chain && dmg > 0) { let p2 = pow; for (let c = 0; c < S.chain; c++) { const pool = this.targetsFor(u, S).filter(x => x.alive); if (!pool.length) break; p2 *= 0.8; await this.strike(u, pool[Math.random() * pool.length | 0], { ...S, pow: p2 }, tags, { fast: true }); } }
         if (S.pierce2) { const o2 = this.targetsFor(u, S).filter(x => x.alive && x !== tgt); if (o2.length) await this.strike(u, o2[Math.random() * o2.length | 0], { ...S, pow: pow * 0.5 }, tags, { atk: S.art ? this.atkFor(u, S.art) : undefined, fast: true }); }
@@ -452,13 +503,14 @@ export class Battle {
         if (S.gilToss) { }
       } else if (S.type === 'heal') {
         this.effect(S.anim || 'heal', tgt, 'light', u); await wait(150);
-        if (S.revive || S.tgt === 'dead') { if (!tgt.alive) { tgt.alive = true; tgt.hp = Math.max(1, Math.round(tgt.st.hp * (S.revive || 0.3))); tgt.spr.setFrame(BPOSE.idle); this.pop(tgt, '復活', '#fff4b0'); } }
+        if (S.revive || S.tgt === 'dead') { if (!tgt.alive) { tgt.alive = true; tgt.hp = Math.max(1, Math.round(tgt.st.hp * Math.max(S.revive || 0.3, u.key === 'grace' ? 0.5 : 0))); tgt.spr.setFrame(BPOSE.idle); this.pop(tgt, '復活', '#fff4b0'); } }
         if (!tgt.alive) return;
         const hb = (u.on?.includes('p_healup') ? 1.25 : 1) * (1 + (u.fx?.healup || 0)) * (u.hands?.some(h => h.type === 'staff') ? 1.3 : 1);
         if (S.full) this.heal(tgt, tgt.st.hp);
         else if (S.pow || S.base) this.heal(tgt, Math.round((u.st.mag * this.bmul(u, 'mag') * (S.pow || 0) + (S.base || 0)) * (0.95 + Math.random() * 0.1) * hb));
         if (S.healP) this.heal(tgt, Math.round(tgt.st.hp * S.healP));
         if (S.cure) { for (const k of ['poison', 'sleep', 'silence', 'blind', 'slow', 'stun', 'stop', 'doom', 'confuse', 'curse']) delete tgt.status[k]; }
+        if (u.key === 'grace') { const bad = ['doom', 'stop', 'stun', 'confuse', 'sleep', 'silence', 'curse', 'blind', 'slow', 'poison'].find(k => tgt.status[k]); if (bad) { delete tgt.status[bad]; this.pop(tgt, STATUS_N[bad] + '解除', '#fff4b0'); } }
         if (S.cureOnly) { for (const k of S.cureOnly) delete tgt.status[k]; this.pop(tgt, '恢復了', '#fff'); }
         if (S.regenAdd) tgt.status.regen = S.regenAdd;
         if (S.rewind) { if (tgt.roundHp > tgt.hp) this.heal(tgt, tgt.roundHp - tgt.hp); for (const k of ['poison', 'sleep', 'silence', 'blind', 'slow', 'stun', 'confuse', 'curse']) delete tgt.status[k]; }
@@ -475,10 +527,11 @@ export class Battle {
         if (S.status && S.self) this.apply(tgt, S.status);
         if (S.barrier) { tgt.barrier[S.barrier] = 4; this.pop(tgt, ELEM[S.barrier] + '護壁', ELEM_COLOR[S.barrier]); }
         if (S.evadeT) { tgt.evadeT = S.evadeT; this.pop(tgt, '閃避提升', '#8affb0'); }
+        if (S.enchantEl) { tgt.enchant = { el: S.enchantEl, t: 3 }; this.pop(tgt, ELEM[S.enchantEl] + '附魔', ELEM_COLOR[S.enchantEl]); }
         if (S.enchant) { const rod = u.hands?.find(h => h.type === 'rod'); const el = [].concat(rod?.fx?.el || [])[0] || 'fire'; tgt.enchant = { el, t: 3 }; this.pop(tgt, ELEM[el] + '附魔', ELEM_COLOR[el]); }
       } else if (S.type === 'debuff') {
         this.effect(S.anim || 'dark', tgt, [].concat(S.el || 'dark')[0], u); await wait(150);
-        if (S.pow) { const r = this.calc(u, tgt, { ...S, type: 'mag' }, S.el ? [].concat(S.el) : [], o); if (!r.miss && !r.block) { this.damage(tgt, r.dmg, { weak: r.weak }); if (r.weak && tgt.side === 'enemy') await this.breakHit(tgt, 1); } }
+        if (S.pow) { const els = S.el ? [].concat(S.el) : []; const rx = tgt.side === 'enemy' && u.side !== 'enemy' ? this.reaction(u, tgt, S, els) : null; const r = this.calc(u, tgt, { ...S, type: 'mag' }, els, { ...o, rx: rx?.mul }); if (!r.miss && !r.block && !r.absorb) { tgt.lastTags = els; tgt.lastBy = u; this.damage(tgt, r.dmg, { weak: r.weak }); if (rx) await this.afterReaction(u, tgt, S, els, rx); if ((r.weak || rx?.brk) && tgt.side === 'enemy') await this.breakHit(tgt, (r.weak ? 1 : 0) + (rx?.brk || 0)); } else if (r.absorb) { this.heal(tgt, r.dmg); this.pop(tgt, '吸收', '#8affb0'); } }
         if (S.status && tgt.alive) this.inflict(tgt, S.status, S.chance || 0.5);
         if (S.multiStatus && tgt.alive) for (const st of S.multiStatus) this.inflict(tgt, st, S.chance || 0.3, true);
         if (S.debuff && tgt.alive) this.buff(tgt, Object.fromEntries(Object.entries(S.debuff).map(([k, v]) => [k, -v])));
@@ -487,7 +540,7 @@ export class Battle {
         if (S.addWeak && tgt.side === 'enemy') { tgt.extraWeak = tgt.extraWeak || {}; tgt.extraWeak[S.addWeak] = 3; tgt.revealed.add(S.addWeak); this.pop(tgt, `弱${ELEM[S.addWeak]}！`, ELEM_COLOR[S.addWeak]); }
         if (S.unresist) { tgt.noResist = 3; tgt.noArmor = 3; this.pop(tgt, '抗性消失', '#ffb04a'); }
       } else if (S.type === 'special') {
-        if (S.analyze) { for (const w of tgt.weak) tgt.revealed.add(w); this.remember(tgt); this.pop(tgt, '弱點看穿！', '#ffe04a'); this.G.audio.sfx('scan'); this.effect('scan', tgt, 'light', u); }
+        if (S.analyze) { delete tgt.status.hidden; for (const w of tgt.weak) tgt.revealed.add(w); this.remember(tgt); this.pop(tgt, '弱點看穿！', '#ffe04a'); this.G.audio.sfx('scan'); this.effect('scan', tgt, 'light', u); }
         if (S.steal) { this.effect('slash', tgt, 'dagger', u); this.steal(u, tgt); }
         if (S.charge) { u.charged = true; this.pop(u, '蓄力中…', '#ff6a6a'); this.effect('buff', u, 'fire', u); }
         if (S.stealGil) { const g = Math.min(this.S.gil, 20 + Math.floor(Math.random() * 40)); this.S.gil -= g; this.pop(tgt, `被偷了 ${g}G`, '#ffe04a'); }
@@ -502,7 +555,7 @@ export class Battle {
     };
     if (S.sacrifice) { this._sac = u.hp - 1; u.hp = 1; this.number(u, this._sac, '#ff8a8a', {}); }
     if (S.tgt === 'random') {
-      for (let k = 0; k < hits; k++) { const pool = this.targetsFor(u, S).filter(t => t.alive); if (!pool.length) break; await doHit(pool[Math.random() * pool.length | 0], k); }
+      for (let k = 0; k < hits; k++) { const pool = this.targetsFor(u, S).filter(t => t.alive); if (!pool.length) break; const pick = u.key === 'fortune' && Math.random() < 0.6 ? pool.slice().sort((a, b) => (a.broken ? 99 : a.shield || 0) - (b.broken ? 99 : b.shield || 0))[0] : pool[Math.random() * pool.length | 0]; await doHit(pick, k); }
     } else {
       for (let k = 0; k < hits; k++) {
         const list = targets.filter(t => t && (t.alive || S.tgt === 'dead' || S.revive));
@@ -521,13 +574,14 @@ export class Battle {
     await this.actorReturn(u);
     // dual cast (passive) and double cast (rod art)
     const isSpell = !S.art && S.type === 'mag';
-    if (u.side === 'party' && isSpell && !o.dual && !o.limit && !o.res && this.foes.length && (u.dualNext || (u.on.includes('p_dualcast') && Math.random() < 0.4))) {
+    if (u.side === 'party' && isSpell && !o.dual && !o.limit && !o.res && this.foes.length && (u.dualNext || (u.on.includes('p_dualcast') && Math.random() < 0.4) || (u.fx?.dualcast && Math.random() < u.fx.dualcast))) {
       u.dualNext = false; this.pop(u, '連續詠唱！', '#c8a0ff'); await wait(300);
       await this.useSkill(u, sid, S.tgt === 'enemy' ? [targets[0]?.alive ? targets[0] : this.foes[0]] : this.targetsFor(u, S), { ...o, dual: true, scroll: true });
     }
     await this.afterAction(u);
     // second action for bosses
-    if (u.side === 'enemy' && u.E.twice && !o.second && Math.random() < u.E.twice && u.alive && !u.broken && !u.status.stop && this.allies.length) { await wait(250); await this.enemyTurn(u, true); }
+    const tw = u.side === 'enemy' ? Math.max(u.E.twice || 0, u.enraged ? 0.35 : 0) : 0;
+    if (u.side === 'enemy' && tw && !o.second && Math.random() < tw && u.alive && !u.broken && !u.status.stop && this.allies.length) { await wait(250); await this.enemyTurn(u, true); }
   }
   banner2(t) { this.msg(t); this.flash('#ffffff', 0.2); }
   dispel(t) { let n = 0; for (const k in t.buffs) if (t.buffs[k].v > 0) { delete t.buffs[k]; n++; } for (const k of ['haste', 'regen', 'reflect', 'reraise']) if (t.status[k]) { delete t.status[k]; n++; } if (n) this.pop(t, '強化消失', '#c8c8c8'); }
@@ -549,8 +603,10 @@ export class Battle {
     this.effect(S.anim || 'slash', tgt, elTag || tags[0] || 'sword', u);
     await wait(ctx.fast ? 100 : 170);
     if (!tgt.alive) return 0;
-    const r = this.calc(u, tgt, S, tags, ctx);
-    if (r.miss) { this.pop(tgt, r.evade ? '閃避' : r.immune ? '無效' : 'MISS', '#c8c8c8'); this.G.audio.sfx('miss'); return 0; }
+    const rx = tgt.side === 'enemy' && u.side !== 'enemy' ? this.reaction(u, tgt, S, tags) : null;
+    const helpless0 = tgt.broken || tgt.status.sleep || tgt.status.stun || tgt.status.stop || tgt.status.frozen;
+    const r = this.calc(u, tgt, S, tags, { ...ctx, rx: rx?.mul });
+    if (r.miss) { this.pop(tgt, r.evade ? '閃避' : r.immune ? '無效' : 'MISS', '#c8c8c8'); this.G.audio.sfx('miss'); if (r.evade && tgt.side === 'party' && u.side === 'enemy' && !ctx.counter && (tgt.fx?.dodgeCounter || (tgt.on?.includes('p_dodgecounter') && Math.random() < 0.5))) this.counterQ = [tgt, u]; return 0; }
     if (r.block) {
       this.pop(tgt, '格擋', '#8ac8ff'); this.G.audio.sfx('guard');
       if ((tgt.stance === 'wall' || tgt.parry) && S.type === 'phys' && u.alive && !ctx.counter) this.counterQ = [tgt, u];
@@ -559,19 +615,31 @@ export class Battle {
     if (r.absorb) { this.heal(tgt, r.dmg); this.pop(tgt, '吸收', '#8affb0'); return 0; }
     if (tgt.parry && S.type === 'phys' && u.side === 'enemy' && Math.random() < 0.3) { this.pop(tgt, '招架！', '#8ac8ff'); this.G.audio.sfx('guard'); this.counterQ = [tgt, u]; return 0; }
     if (tgt.stance === 'parry' && S.type === 'phys' && u.side === 'enemy') { this.pop(tgt, '招架！', '#8ac8ff'); this.G.audio.sfx('guard'); this.counterQ = [tgt, u]; return 0; }
+    tgt.lastTags = tags; tgt.lastBy = u; const el0 = tags.find(x => ELEM[x]); const prevEl = tgt.lastEl; if (el0) tgt.lastEl = el0;
     this.damage(tgt, r.dmg, { weak: r.weak, crit: r.crit, resist: r.resist });
     const hand = ctx.hand;
+    if (rx) await this.afterReaction(u, tgt, S, tags, rx);
+    if (tgt.status.hidden && (S.tgt !== 'enemy' || tags.includes('light'))) { delete tgt.status.hidden; this.pop(tgt, '現形！', '#ffe04a'); }
+    if (tgt.side === 'enemy' && u.side === 'party') {
+      if (u.key === 'purge' || u.fx?.antiUndying) tgt.noUndying = true;
+      if (u.key === 'purge') tgt.noRegen = 2;
+      if ((u.key === 'hawkeye' && ['bow', 'gun'].includes(hand?.type || S.wpn || S.art)) || u.fx?.revealHit) this.revealOne(tgt);
+      if (u.key === 'opportunist' && helpless0 && !tgt.stolen && tgt.alive) this.steal(u, tgt);
+      if (this.pairs?.has('twins') && r.crit && !tgt.stolen && tgt.alive) this.steal(u, tgt);
+    }
     // breaking shields: weakness hits, or weapons / effects that crack them anyway
     if (tgt.side === 'enemy') {
       let n = 0;
-      if (r.weak) n = 1 + (S.brk || 0) + (u.on?.includes('p_breaker') ? 1 : 0) + (r.markHit ? 1 : 0) + (S.type === 'mag' && !S.art && u.hands?.some(h => h.type === 'rod') && tags.some(t => ELEM[t]) ? 1 : 0);
+      if (r.weak || rx?.brk) n = (r.weak ? 1 + (S.brk || 0) + (u.on?.includes('p_breaker') ? 1 : 0) : 0) + (rx?.brk || 0) + (r.markHit ? 1 : 0) + (S.type === 'mag' && !S.art && u.hands?.some(h => h.type === 'rod') && tags.some(t => ELEM[t]) ? 1 : 0);
       else if ((hand?.type === 'hammer' && Math.random() < 0.35) || (u.fx?.brk && Math.random() < u.fx.brk)) { n = 1; this.pop(tgt, '震擊', '#ffd04a'); }
-      if (r.markHit) tgt.mark = null;
+      if (r.markHit && u.key !== 'hawkeye') tgt.mark = null;
+      if (u.side === 'party' && u.key === 'firstcut' && !u.firstCutUsed) { u.firstCutUsed = true; n++; }
+      if (u.key === 'flurry' && (hand?.type === 'knuckle' || S.art === 'knuckle') && (u.combo || 0) >= 3) n++;
       if (n) await this.breakHit(tgt, n);
     }
     // weapon traits on hit
     if (hand?.type === 'axe' && tgt.alive && S.type === 'phys') { this.buff(tgt, { def: -1 }, true); if (tgt.traits?.has('armor') && !tgt.noArmor) { tgt.noArmor = 2; this.pop(tgt, '破甲', '#ffb04a'); } }
-    if (hand?.type === 'knuckle' || S.art === 'knuckle') { u.combo = u.comboT === tgt ? Math.min(5, (u.combo || 0) + 1) : 0; u.comboT = tgt; if (u.combo) this.pop(u, `${u.combo + 1} COMBO`, '#ffb04a'); }
+    if (hand?.type === 'knuckle' || S.art === 'knuckle') { u.combo = u.comboT === tgt || u.key === 'flurry' ? Math.min(u.on?.includes('p_combo') ? 8 : 5, (u.combo || 0) + 1) : 0; u.comboT = tgt; if (u.combo) this.pop(u, `${u.combo + 1} COMBO`, '#ffb04a'); }
     const onHit = { ...(hand?.fx?.onHit || {}), ...(S.type === 'phys' && !hand && S.art ? (u.hands?.find(h => h.type === S.art)?.fx?.onHit || {}) : {}) };
     for (const [st, ch] of Object.entries(onHit)) if (tgt.alive) this.inflict(tgt, st, ch * (hand?.type === 'whip' || S.art === 'whip' ? 2 : 1), true);
     if (u.side === 'party' && S.type === 'phys') {
@@ -579,28 +647,97 @@ export class Battle {
       if (u.fx?.mpdrain) u.mp = Math.min(u.st.mp, u.mp + Math.round(r.dmg * u.fx.mpdrain));
     }
     if (S.drain) this.heal(u, Math.round(r.dmg * 0.5));
+    if (u.side === 'party' && S.type === 'phys' && u.key === 'rage' && u.hp < u.st.hp * 0.5) this.heal(u, Math.round(r.dmg * 0.1), true);
+    // thorny monsters bite back at whoever hits them up close
+    if (tgt.side === 'enemy' && tgt.traits?.has('thorns') && u.side === 'party' && S.type === 'phys' && !S.ranged && !ctx.counter && u.hp > 1 && (WTYPES[hand?.type || S.art || S.wpn]?.melee ?? true) && !(u.key === 'flurry' && (hand?.type === 'knuckle' || S.art === 'knuckle'))) this.damage(u, Math.min(u.hp - 1, Math.max(1, Math.round(r.dmg * 0.2))), { color: '#8aff6a' });
+    if (u.side === 'enemy' && u.traits?.has('curse') && S.type === 'phys' && tgt.alive) this.inflict(tgt, 'curse', 0.35, true);
+    // chain lightning
+    if (u.side === 'party' && tags.includes('thunder') && !ctx.chained && (u.key === 'chain' || u.fx?.chainT)) {
+      const pool = this.foes.filter(f => f !== tgt); let n = 1 + (rx?.wasWet ? 1 : 0) + (this.pairs?.has('storm') ? 1 : 0);
+      while (n-- > 0 && pool.length) { const x = pool.splice(Math.random() * pool.length | 0, 1)[0]; this.pop(x, '連鎖', '#ffe04a'); await this.strike(u, x, { ...S, pow: (S.pow || 1) * 0.6 }, tags, { ...ctx, chained: true, fast: true }); }
+    }
     if (tgt.side === 'party' && tgt.alive && S.type === 'phys' && u.alive && !ctx.counter && !['bow', 'gun'].includes(hand?.type)) {
-      if (tgt.fx?.thorns) { const d = Math.max(1, Math.round(r.dmg * tgt.fx.thorns)); this.damage(u, d, { color: '#ffb04a' }); }
-      const cc = (tgt.on.includes('p_counter') ? 0.35 : 0) + (tgt.fx?.counter || 0) + (tgt.stance === 'counter' ? 1 : 0);
+      if (tgt.fx?.thorns) { const d = Math.max(1, Math.round(r.dmg * tgt.fx.thorns * (tgt.key === 'bulwark' ? 2 : 1))); this.damage(u, d, { color: '#ffb04a' }); }
+      const cc = (tgt.on.includes('p_counter') ? 0.35 : 0) + (tgt.fx?.counter || 0) + (tgt.stance === 'counter' ? 1 : 0) + (tgt.key === 'bulwark' ? 0.15 : 0);
       if (Math.random() < cc) this.counterQ = [tgt, u];
     }
     return r.dmg;
   }
 
+  // what the element of this hit does to the element already on the target
+  reaction(u, t, S, tags) {
+    const st = t.status, els = tags.filter(x => ELEM[x]);
+    const blunt = S.type === 'phys' && (tags.includes('hammer') || tags.includes('knuckle'));
+    let name = null, mul = 1, brk = 0, eff = null;
+    for (const el of els) {
+      if (el === 'thunder' && st.wet) { name = '感電'; mul = 1.8; brk = 1; eff = 'shock'; break; }
+      if (el === 'ice' && st.wet) { name = '凍結'; mul = 1.2; eff = 'freeze'; break; }
+      if (el === 'fire' && (st.chill || st.frozen)) { name = '融解'; mul = 2; eff = 'melt'; break; }
+      if (el === 'water' && st.burn) { name = '蒸氣'; mul = 1.4; eff = 'steam'; break; }
+      if (el === 'wind' && st.burn) { name = '延燒'; mul = 1.3; eff = 'spread'; break; }
+      if (el === 'wind' && st.wet) { name = '寒風'; eff = 'chillwind'; break; }
+      if (el === 'earth' && st.wet) { name = '泥沼'; mul = 1.2; eff = 'mud'; break; }
+      if (el === 'light' && st.erosion) { name = '聖爆'; mul = 2; eff = 'holy'; break; }
+    }
+    if (!name && st.frozen && (blunt || els.includes('earth'))) { name = '粉碎'; mul = 2.5; brk = 1; eff = 'shatter'; }
+    if (name) {
+      if (u.key === 'resonate') mul = 1 + (mul - 1) * 1.5;
+      if (eff === 'steam' && this.pairs?.has('steam')) mul *= 2;
+      if (eff === 'shatter' && this.pairs?.has('shatter')) mul *= 1.5;
+    }
+    return { name, mul, brk, eff, els, wasWet: !!st.wet, hadChill: !!st.chill };
+  }
+  async afterReaction(u, t, S, tags, rx) {
+    if (t.hp <= 0) return;
+    const st = t.status;
+    if (rx.name) {
+      this.pop(t, rx.name + '！', '#ffe04a', true); this.flash('#ffffff', 0.12);
+      if (rx.eff === 'shock') { delete st.wet; if (!t.boss && (this.pairs?.has('storm') || this.allies.some(a => a.fx?.shockStun) || Math.random() < 0.5)) this.inflict(t, 'stun', 1, true); }
+      if (rx.eff === 'freeze') { delete st.wet; await this.freeze(u, t); }
+      if (rx.eff === 'melt') { delete st.chill; delete st.frozen; }
+      if (rx.eff === 'steam') { delete st.burn; for (const f of this.foes) this.inflict(f, 'blind', this.pairs?.has('steam') ? 1 : 0.5, true); }
+      if (rx.eff === 'spread') for (const f of this.foes) if (f !== t) this.setState(f, 'burn', 2, u);
+      if (rx.eff === 'chillwind') { delete st.wet; this.setState(t, 'chill', 2, u); }
+      if (rx.eff === 'mud') { delete st.wet; this.setState(t, 'mud', 2, u); if (t.traits?.has('fly')) t.grounded = 2; }
+      if (rx.eff === 'holy') { delete st.erosion; this.dispel(t); }
+      if (rx.eff === 'shatter') delete st.frozen;
+    } else for (const el of rx.els) { const k = STATE_OF[el]; if (k) this.setState(t, k, 2, u); }
+    if (rx.els.includes('water') && (u.key === 'tide' || u.fx?.wetAll)) for (const f of this.foes) if (f !== t) this.setState(f, 'wet', 2, u);
+    if (!rx.name && rx.els.includes('ice') && rx.hadChill && u.on?.includes('p_freezelong') && Math.random() < 0.3) await this.freeze(u, t);
+    if (S.freeze && t.alive && !st.frozen && (rx.wasWet || Math.random() < S.freeze)) await this.freeze(u, t);
+    this.ui.refresh();
+  }
+  setState(t, k, n, u) {
+    if (!t.alive || t.E?.metal) return;
+    let d = n;
+    if (k === 'burn' && (u?.on?.includes('p_burnlong') || this.pairs?.has('pyre'))) d += 2;
+    if (k === 'wet' && u?.on?.includes('p_wetlong')) d += 2;
+    t.status[k] = Math.max(t.status[k] || 0, d);
+    if (k === 'burn') t.burnBy = u;
+  }
+  async freeze(u, t) {
+    if (!t.alive) return;
+    if (t.boss) { this.pop(t, '凍住了一瞬', '#bfe8ff'); await this.breakHit(t, 1); return; }
+    delete t.status.wet; delete t.status.chill;
+    t.status.frozen = u?.key === 'permafrost' ? 2 : 1; this.pop(t, '凍結', '#bfe8ff');
+    if (u?.key === 'permafrost' && t.side === 'enemy') await this.breakHit(t, 1);
+  }
   calc(u, t, S, tags, o = {}) {
     const phys = S.type === 'phys';
     const hand = o.hand, wt = hand?.type || S.art || S.wpn;
     const W = WTYPES[wt];
+    if (t.status.hidden && S.tgt === 'enemy' && !tags.includes('light') && u.side !== 'enemy' && Math.random() < 0.6) return { miss: true, evade: true };
+    if (t.side === 'party' && t.key === 'shadow' && !t.shadowUsed && u.side === 'enemy' && (S.type === 'phys' || S.type === 'mag')) { t.shadowUsed = true; this.counterQ = [t, u]; return { miss: true, evade: true }; }
     let A;
     if (S.byDef) A = u.st.def * this.bmul(u, 'def') * 1.5;
     else A = phys ? (o.atk ?? u.st.atk) * this.bmul(u, 'atk') : u.st.mag * this.bmul(u, 'mag');
-    const flying = t.traits?.has('fly') && !t.grounded;
+    const flying = t.traits?.has('fly') && !t.grounded && !t.status.mud;
     if (flying && tags.includes('earth') && !phys) return { miss: true, immune: true };
     if (t.E?.metal && !phys) return { miss: true, immune: true };
     if (phys) {
       if (u.status.blind && Math.random() < 0.5) return { miss: true };
       const sure = ['bow', 'gun'].includes(wt) || S.ranged;
-      const ev = (t.evadeT || 0) + (t.fx?.evade || 0) + (t.traits?.has('evade') ? 0.25 : 0) - (wt === 'dagger' ? 0.1 : 0);
+      const ev = t.status.mud ? 0 : (t.evadeT || 0) + (t.fx?.evade || 0) + (t.traits?.has('evade') ? 0.25 : 0) - (wt === 'dagger' ? 0.1 : 0);
       if (t.evadeT) t.evadeT = 0;
       if (!sure && wt === 'axe' && Math.random() < 0.1) return { miss: true };
       if (!sure && Math.random() < ev) return { miss: true, evade: true };
@@ -613,12 +750,13 @@ export class Battle {
     if (S.ignoreDef) D *= 1 - S.ignoreDef;
     let dmg = A * (S.pow || 1) * 60 / (60 + D * 1.5);
     if (u.side === 'enemy') dmg *= ENEMY_DMG;
-    if (u.side === 'summon') dmg *= 1.15;
+    if (u.side === 'summon') dmg *= 1.15 * (u.up || 1);
     const weakList = t.side === 'enemy' ? [...t.weak, ...Object.keys(t.extraWeak || {})] : [];
     const weak = tags.some(x => weakList.includes(x));
     const resist = !weak && t.side === 'enemy' && !t.noResist && tags.length && tags.every(x => t.resist.includes(x));
     if (weak) { dmg *= 1.5; for (const x of tags) if (weakList.includes(x)) t.revealed.add(x); this.remember(t); }
     if (resist) dmg *= 0.5;
+    if (t.side === 'enemy' && t.absorb?.length && !t.noResist && tags.some(x => t.absorb.includes(x))) return { dmg: Math.max(1, Math.round(dmg * 0.5)), absorb: true };
     // party resistances, absorption and barriers
     if (t.side === 'party') {
       for (const e of tags) {
@@ -631,12 +769,33 @@ export class Battle {
     // flying enemies dodge blades; bows and boomerangs pluck them out of the air
     if (flying && phys) { if (W?.melee && !S.ranged) dmg *= 0.6; if (wt === 'bow') dmg *= 1.3; if (wt === 'boomerang') dmg *= 1.2; if (S.vsFly) dmg *= S.vsFly; }
     if (armored && S.vsArmor) dmg *= S.vsArmor;
-    const helpless = t.broken || t.status.sleep || t.status.stun || t.status.stop;
+    const helpless = t.broken || t.status.sleep || t.status.stun || t.status.stop || t.status.frozen;
     if (S.vsHelpless && helpless) dmg *= S.vsHelpless;
     else if (wt === 'dagger' && phys && helpless) dmg *= 1.5;
     if (u.fx && t.fam) dmg *= Math.max(u.fx.slay?.[t.fam] || 1, hand?.fx?.slay?.[t.fam] || 1, flying ? (u.fx.slay?.flying || hand?.fx?.slay?.flying || 1) : 1);
     if (this.zone?.el && tags.includes(this.zone.el)) dmg *= 1.4;
-    let markHit = false; if (t.mark && tags.includes(t.mark.el)) { dmg *= 1.5; markHit = true; }
+    if (t.side === 'enemy') {
+      if (phys && t.traits?.has('ghost') && !tags.some(x => ELEM[x]) && !t.noResist) dmg *= 0.3;
+      if (!phys && S.type === 'mag' && !S.art && t.traits?.has('mimmune') && !t.noResist) dmg *= 0.35;
+      if (this.foes.some(f => f !== t && f.aura === 'guard')) dmg *= 0.7;
+      if (t.status.wet) dmg *= 1 + (this.hasKey('tide') ? 0.15 : 0) + Math.max(0, ...this.allies.map(a => a.fx?.wetAmp || 0));
+    }
+    if (u.side === 'enemy') { if (this.foes.some(f => f !== u && f.aura === 'might')) dmg *= 1.3; if (u.enraged) dmg *= 1.4; }
+    if (u.side === 'party') {
+      if (u.fx?.elUp) for (const x of tags) if (u.fx.elUp[x]) dmg *= 1 + u.fx.elUp[x];
+      if (['undead', 'demon'].includes(t.fam)) dmg *= (u.key === 'purge' ? 1.5 : 1) * (u.on?.includes('p_antiundead') ? 1.3 : 1);
+      if (phys && u.key === 'rage' && u.hp < u.st.hp * 0.5) dmg *= 1.5;
+      if (phys && u.on?.includes('p_bloodrage') && u.hp < u.st.hp * 0.3) dmg *= 1.3;
+      if (u.key === 'harvest' && tags.includes('dark')) dmg *= 1 + 0.25 * Math.min(3, this.debuffCount(t));
+      if (S.vsState) for (const [k, m] of Object.entries(S.vsState)) if (t.status[k]) { dmg *= m; break; }
+      if (flying && (u.key === 'dragoon' || this.pairs?.has('skyhunt'))) dmg *= 1.5;
+      if (this.pairs?.has('twilight') && ((t.lastEl === 'light' && tags.includes('dark')) || (t.lastEl === 'dark' && tags.includes('light')))) dmg *= 1.4;
+      if (u.key === 'artisan' && t.fam === 'machine') dmg *= 1.3;
+      if (S.luck) dmg *= 0.5 + Math.random() * 2;
+    }
+    if (o.rx) dmg *= o.rx;
+    if (u._counterNow && u.key === 'bulwark') dmg *= 1.5;
+    let markHit = false; if (t.mark && tags.includes(t.mark.el)) { dmg *= (u.key === 'hawkeye' ? 1.8 : 1.5) * (1 + (u.fx?.markAmp || 0)); markHit = true; }
     if (t.side === 'enemy' && t.broken) dmg *= 1.6;
     if (this.inExtra) dmg *= 1.3;
     if (u.charged) dmg *= 2.5;
@@ -644,8 +803,10 @@ export class Battle {
     if (u.on) { for (const [p, e] of [['p_fireup', 'fire'], ['p_thunderup', 'thunder'], ['p_windup', 'wind']]) if (u.on.includes(p) && tags.includes(e)) dmg *= 1.25; }
     if (!phys && !S.art && u.hands?.some(h => h.type === 'rod') && tags.some(x => ELEM[x])) dmg *= 1.2;
     if (u.fx?.lowhp) dmg *= 1 + u.fx.lowhp * (1 - u.hp / u.st.hp);
-    if (wt === 'knuckle' && phys && u.comboT === t) dmg *= 1 + 0.2 * Math.min(5, (u.combo || 0) + 1);
-    let critC = phys && wt !== 'gun' ? (u.on?.includes('p_crit') ? 0.15 : 0.05) + (u.fx?.crit || 0) + (S.critUp || 0) : 0;
+    if (wt === 'knuckle' && phys && (u.comboT === t || u.key === 'flurry')) dmg *= 1 + 0.2 * Math.min(u.on?.includes('p_combo') ? 8 : 5, (u.combo || 0) + 1);
+    const helplessC = t.broken || t.status.sleep || t.status.stun || t.status.stop || t.status.frozen;
+    let critC = phys && wt !== 'gun' ? (u.on?.includes('p_crit') ? 0.15 : 0.05) + (u.fx?.crit || 0) + (S.critUp || 0) + (u.key === 'fortune' ? 0.15 : 0) + (u.on?.includes('p_marksman') && wt === 'bow' ? 0.15 : 0) : 0;
+    if (phys && u.side === 'party' && ((u.key === 'opportunist' && helplessC) || (u.key === 'firstcut' && !u.firstCutUsed) || (this.pairs?.has('iaido') && wt === 'katana' && t.broken))) critC = 1;
     if (phys && wt === 'katana' && !u.drawn && u.side === 'party') critC = 1;
     if (S.iai && this.firstInRound === u) critC = 1;
     const crit = Math.random() < critC; if (crit) dmg *= wt === 'katana' ? 2 : 1.5;
@@ -659,7 +820,7 @@ export class Battle {
   buff(u, o, quiet) {
     for (const k in o) {
       const cur = u.buffs[k]?.v || 0; const v = Math.max(-3, Math.min(3, cur + o[k]));
-      u.buffs[k] = { v, t: 3 };
+      u.buffs[k] = { v, t: 3 + (o[k] > 0 && this.curActor?.key === 'encore' ? 2 : 0) };
       if (!quiet) this.pop(u, ({ atk: '攻擊', def: '防禦', mag: '魔力', spr: '精神', spd: '速度' })[k] + (o[k] > 0 ? '↑' : '↓'), o[k] > 0 ? '#8affb0' : '#ff8a8a');
     }
     this.ui.refresh();
@@ -669,11 +830,11 @@ export class Battle {
     if (t.immune || t.immuneSet?.has(st) || t.E?.metal) { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; }
     if (t.boss) { if (st === 'doom') { if (!quiet) this.pop(t, '無效', '#c8c8c8'); return; } if (['sleep', 'stop', 'confuse', 'stun'].includes(st)) chance *= 0.25; }
     if (Math.random() > chance) return;
-    t.status[st] = { stop: 2, stun: 1, doom: 3, confuse: 2 }[st] || 3;
+    t.status[st] = ({ stop: 2, stun: 1, doom: 3, confuse: 2 }[st] || 3) * (['slow', 'stop'].includes(st) && this.curActor?.key === 'gears' ? 2 : 1);
     this.pop(t, STATUS_N[st], '#c86aff');
     if (st === 'stop' || st === 'stun') this.ui.timeline();
   }
-  apply(t, st) { t.status[st] = st === 'reraise' ? 99 : st === 'haste' ? 4 : 3; this.pop(t, STATUS_N[st], '#8affb0'); }
+  apply(t, st) { t.status[st] = st === 'reraise' ? 99 : st === 'haste' ? 4 * (this.curActor?.key === 'gears' ? 2 : 1) + (this.curActor?.on?.includes('p_timelong') ? 2 : 0) : 3; this.pop(t, STATUS_N[st], '#8affb0'); }
   steal(u, t) {
     if (t.stolen) { this.pop(t, '已經沒東西了', '#c8c8c8'); return; }
     const d = t.E.drops || [], bonus = u.fx?.steal || 0;
@@ -690,6 +851,7 @@ export class Battle {
     t.shield = Math.max(0, t.shield - n);
     this.ui.refresh();
     if (t.shield === 0) {
+      if (this.curActor?.key === 'fortune') this.curActor.limit = Math.min(100, (this.curActor.limit || 0) + 25);
       t.broken = true; t.brokenUntil = this.round + 1;
       this.G.audio.sfx('break');
       this.pop(t, 'BREAK!', '#ffe04a', true);
@@ -706,11 +868,13 @@ export class Battle {
     t.hp = Math.max(0, t.hp - d);
     if (t.status.sleep && Math.random() < 0.5) delete t.status.sleep;
     if (t.status.confuse && Math.random() < 0.3) delete t.status.confuse;
+    if (t.side === 'enemy' && t.traits?.has('enrage') && !t.enraged && t.hp > 0 && t.hp <= t.st.hp * 0.5) { t.enraged = true; t.status.enraged = 99; this.pop(t, '狂暴化！', '#ff4a3a', true); }
+    if (t.hp <= 0 && t.side === 'party' && !this.rewindUsed && this.hasKey('gears') && (t.roundHp || 0) > 0) { this.rewindUsed = true; t.hp = Math.max(1, t.roundHp); this.pop(t, '時間倒流！', '#e8d08a', true); }
     if (t.hp <= 0 && t.side === 'party' && t.fx?.survive && !t.survived2) { t.hp = 1; t.survived2 = true; this.pop(t, '不屈！', '#ffb04a'); }
     if (t.hp <= 0 && t.side === 'party' && t.on.includes('p_survive') && !t.survived) { t.hp = 1; t.survived = true; this.pop(t, '不屈！', '#ffb04a'); }
     this.number(t, d, o.weak ? '#ffe04a' : o.color || (t.side === 'party' ? '#ff8a8a' : '#ffffff'), o);
     t.flash = 1; t.shakeT = 0.3;
-    if (t.side === 'party') { t.limit = Math.min(100, t.limit + Math.round(d / t.st.hp * 70 * (1 + (t.fx?.limitup || 0)))); if (t.hp > 0) t.spr.setFrame(BPOSE.hurt); }
+    if (t.side === 'party') { t.limit = Math.min(100, t.limit + Math.round(d / t.st.hp * 70 * (1 + (t.fx?.limitup || 0)) * ((t.key === 'rage' && t.hp < t.st.hp * 0.5) || (t.on?.includes('p_bloodrage') && t.hp < t.st.hp * 0.3) ? 2 : 1))); if (t.hp > 0) t.spr.setFrame(BPOSE.hurt); }
     this.G.audio.sfx(o.weak ? 'weak' : 'hit');
     if (t.hp <= 0) t.dying = true;
     this.ui.refresh();
@@ -719,12 +883,29 @@ export class Battle {
   checkDeaths() {
     for (const u of this.units) if (u.alive && u.hp <= 0) {
       if (u.side === 'party' && u.status.reraise) { delete u.status.reraise; u.hp = Math.max(1, Math.round(u.st.hp * 0.2)); this.pop(u, '自動復活！', '#fff4b0'); this.effect('raise', u, 'light', u); continue; }
+      if (u.side === 'enemy' && u.traits?.has('undying') && !u.revived && !u.noUndying && !u.broken && !(u.lastTags || []).some(x => x === 'light' || x === 'fire')) { u.revived = true; u.hp = Math.round(u.st.hp * 0.4); this.pop(u, '不死復活！', '#c84aff', true); this.effect('raise', u, 'dark', u); continue; }
       u.alive = false; u.dying = false;
-      if (u.side === 'enemy') { this.fadeOut(u); this.G.audio.sfx('kill'); }
+      if (u.side === 'enemy') { this.fadeOut(u); this.G.audio.sfx('kill'); this.onEnemyDeath(u); }
       else { u.spr.setFrame(BPOSE.ko); u.buffs = {}; u.status = {}; u.jumping = null; u.oy = 0; }
       this.queue = (this.queue || []).filter(q => q !== u);
     }
+    if (this.recheck) { this.recheck = false; return this.checkDeaths(); }
     this.ui.refresh(); this.ui.timeline();
+  }
+  onEnemyDeath(u) {
+    const k = u.lastBy;
+    if (u.traits.has('burst') && !u.broken && !(u.lastTags || []).some(x => x === 'ice' || x === 'water')) {
+      this.pop(u, '自爆！', '#ff6a2a', true); this.camShake = 0.4; this.effect('explode', u, 'fire', u);
+      for (const a of this.allies) this.damage(a, Math.max(1, Math.round(a.st.hp * 0.12 * (a.fx?.resist?.fire ?? 1))), {});
+      this.recheck = true;
+    }
+    if (u.traits.has('swarm')) for (const f of this.foes) if (f.E?.kind === u.E?.kind) this.buff(f, { atk: 1 }, true);
+    if (this.hasKey('harvest')) for (const a of this.allies) a.mp = Math.min(a.st.mp, a.mp + Math.round(a.st.mp * 0.08));
+    if (k?.side === 'party') {
+      if (k.on?.includes('p_soulharvest')) k.mp = Math.min(k.st.mp, k.mp + Math.round(k.st.mp * 0.15));
+      if (k.fx?.killHeal) this.heal(k, Math.round(k.st.hp * k.fx.killHeal), true);
+    }
+    if (u.status.burn && (u.burnBy?.key === 'inferno' || u.burnBy?.fx?.spreadBurn)) for (const f of this.foes) this.setState(f, 'burn', 2, u.burnBy);
   }
   async fadeOut(u) {
     const m = u.spr.mat; m.transparent = true; m.alphaTest = 0;
@@ -743,7 +924,7 @@ export class Battle {
     let targets;
     const pool = this.allies.filter(a => !a.jumping);
     if (!pool.length) return;
-    if (S.tgt === 'enemy') { const taunt = pool.filter(a => a.taunt); targets = [taunt.length && Math.random() < 0.8 ? taunt[0] : pool[Math.random() * pool.length | 0]]; }
+    if (S.tgt === 'enemy') { const taunt = pool.filter(a => a.taunt); targets = [taunt.length && (taunt[0].key === 'aegisheart' || Math.random() < 0.8) ? taunt[0] : pool[Math.random() * pool.length | 0]]; }
     else if (S.tgt === 'enemies' || S.tgt === 'random') targets = pool;
     else if (S.tgt === 'allyE') { const low = this.foes.sort((a, b) => a.hp / a.st.hp - b.hp / b.st.hp)[0]; targets = [low]; S = { ...S, tgt: 'ally' }; }
     else targets = [u];
@@ -753,27 +934,31 @@ export class Battle {
   // ---------------------------------------------------------------- summons
   async summon(u, sid) {
     const D = SUMMONS[sid];
-    if (u.mp < D.mp) { this.msg('MP不足！'); await wait(500); return; }
-    u.mp -= D.mp;
+    const cost = Math.round(D.mp * (u.key === 'pact' ? 0.6 : 1));
+    if (u.mp < cost) { this.msg('MP不足！'); await wait(500); return; }
+    u.mp -= cost;
     await this.ui.banner(D.name, '召喚', '#ffb04a');
     let px = monsterPx(D.look, D.colors); if (D.look !== 'knight') px = px.flip().flip();
     // summons face the enemies (left), their art already faces left
     const spr = new VoxelSprite(px, { scale: 2.3, glow: 0.4 }); spr.pop = 1;
-    const su = { side: 'summon', sid, D, name: D.name, spr, st: { atk: u.st.mag * 1.1, mag: u.st.mag * 1.2, spd: u.st.spd, hp: 1, def: 0, spr: 0 }, buffs: {}, status: {}, alive: true, turns: 0, on: [], x: 7, z: -0.5, y: 0, ox: 0, oy: 0, flash: 0 };
+    const su = { side: 'summon', sid, D, name: D.name, spr, st: { atk: u.st.mag * 1.1, mag: u.st.mag * 1.2, spd: u.st.spd, hp: 1, def: 0, spr: 0 }, buffs: {}, status: {}, alive: true, turns: 0, on: [], x: 7, z: -0.5, y: 0, ox: 0, oy: 0, flash: 0, maxT: u.key === 'pact' ? 4 : 3, pact: u.key === 'pact', up: u.on.includes('p_summonup') ? 1.3 : 1 };
     spr.mesh.position.set(7, 0, -0.5); spr.mesh.rotation.y = -0.4; this.scene.add(spr.mesh);
     this.summonU = su;
     this.fx.emit({ x: 7, y: 1.5, z: -0.5, n: 80, color: '#ffe0a0', speed: 4, life: 1.2, size: 0.35, gravity: -1 });
     this.G.audio.sfx('summon');
+    if (this.pairs?.has('covenant')) for (const a of this.allies) this.heal(a, Math.round(a.st.hp * 0.3));
     await wait(600);
     this.ui.timeline();
   }
   async summonTurn(su) {
     su.turns++;
     const D = su.D;
-    const sid = su.turns >= 3 ? D.ult : D.acts[(su.turns - 1) % D.acts.length];
-    if (su.turns >= 3) { await this.ui.banner(SKILLS[sid].name, D.name, '#ffb04a'); }
+    const last = su.turns >= (su.maxT || 3);
+    const sid = last ? D.ult : D.acts[(su.turns - 1) % D.acts.length];
+    if (last) { await this.ui.banner(SKILLS[sid].name, D.name, '#ffb04a'); }
     await this.useSkill(su, sid, this.targetsFor(su, SKILLS[sid]), { res: true });
-    if (su.turns >= 3) {
+    if (last && su.pact) for (const f of this.foes) await this.breakHit(f, 2);
+    if (last) {
       this.msg(`${D.name} 離開了`);
       const m = su.spr.mat; m.transparent = true; m.alphaTest = 0; let t = 0; while (t < 0.6) { t += await this.G.frame(); m.opacity = 1 - t / 0.6; su.oy = t * 4; }
       this.scene.remove(su.spr.mesh); this.summonU = null; this.ui.timeline();
@@ -798,7 +983,10 @@ export class Battle {
 
   // ---------------------------------------------------------------- items
   async useItem(u, id, targets) {
-    const I = ITEMS[id]; this.S.items[id]--; if (!this.S.items[id]) delete this.S.items[id];
+    const I = ITEMS[id];
+    const save = (u.key === 'alchemy' && Math.random() < 0.3) || (u.on?.includes('p_itemsave') && Math.random() < 0.25) || (this.pairs?.has('workshop') && Math.random() < 0.4);
+    if (save) this.pop(u, '沒有消耗！', '#a8e86a'); else { this.S.items[id]--; if (!this.S.items[id]) delete this.S.items[id]; }
+    const ik = (u.key === 'alchemy' ? 1.6 : 1);
     const e = I.use;
     if (e.cast) { this.msg(I.name); return this.useSkill(u, e.cast, targets, { scroll: true }); }
     this.msg(I.name); u.spr.setFrame(BPOSE.item); await wait(300);
@@ -806,7 +994,7 @@ export class Battle {
     for (const t of targets) {
       if (e.revive) { if (!t.alive) { t.alive = true; t.hp = Math.max(1, Math.round(t.st.hp * e.revive)); t.spr.setFrame(BPOSE.idle); this.pop(t, '復活', '#fff4b0'); this.effect('raise', t, 'light', u); } continue; }
       if (!t.alive) continue;
-      if (e.heal) { this.heal(t, Math.round(e.heal * (1 + (u.fx?.healup || 0) * 0.5))); this.effect('heal', t, 'light', u); }
+      if (e.heal) { this.heal(t, Math.round(e.heal * ik * (u.on?.includes('p_itemup') ? 1.3 : 1) * (1 + (u.fx?.healup || 0) * 0.5))); this.effect('heal', t, 'light', u); }
       if (e.mp) { const b = t.mp; t.mp = Math.min(t.st.mp, t.mp + e.mp); this.number(t, t.mp - b, '#8ac8ff', {}); }
       if (e.cure) { for (const k of ['poison', 'sleep', 'silence', 'blind', 'slow', 'stun', 'stop', 'doom', 'confuse', 'curse']) delete t.status[k]; this.pop(t, '恢復了', '#fff'); }
       if (e.cureOnly) { for (const k of e.cureOnly) delete t.status[k]; this.pop(t, '恢復了', '#fff'); }
@@ -820,11 +1008,14 @@ export class Battle {
       if (e.dmg) {
         const tag = e.el || e.wpn; this.effect(e.el === 'fire' ? 'explode' : e.el ? ({ earth: 'quake', light: 'holy' }[e.el] || e.el) : 'slash', t, tag, u);
         const weak = t.weak?.includes(tag) || !!t.extraWeak?.[tag];
-        let d = e.dmg * (weak ? 1.5 : 1) * (t.broken ? 1.6 : 1) * (0.9 + Math.random() * 0.2);
+        let d = e.dmg * ik * (u.key === 'artisan' ? 1.5 : 1) * (weak ? 1.5 : 1) * (t.broken ? 1.6 : 1) * (0.9 + Math.random() * 0.2);
         if (e.el && this.zone?.el === e.el) d *= 1.4;
         if (e.el === 'earth' && t.traits?.has('fly') && !t.grounded) { this.pop(t, '無效', '#c8c8c8'); continue; }
         this.damage(t, Math.round(d), { weak });
-        if (weak) { t.revealed.add(tag); this.remember(t); await this.breakHit(t, 1); }
+        t.lastTags = [tag]; t.lastBy = u;
+        if (weak) { t.revealed.add(tag); this.remember(t); }
+        if (weak || u.key === 'artisan') await this.breakHit(t, (weak ? 1 : 0) + (u.key === 'artisan' ? 1 : 0));
+        if (u.key === 'alchemy' && e.el && t.alive) await this.afterReaction(u, t, { type: 'mag' }, [e.el], this.reaction(u, t, { type: 'mag' }, [e.el]));
       }
     }
     await wait(400); this.checkDeaths(); u.spr.setFrame(BPOSE.idle); this.ui.refresh();
@@ -961,15 +1152,22 @@ export class Battle {
       const e = u.E; this.S.kills[u.id] = (this.S.kills[u.id] || 0) + 1;
       (e.drops || []).forEach(([id, ch], slot) => { if (id && Math.random() < Math.min(1, ch * dropMul)) { drops.push(id); addItem(this.S, id, 1); this.S.dropSeen[u.id + ':' + slot] = 1; } });
     }
+    const woke = [];
+    for (const eid of NEW_ECHOES) {
+      const EE = ECHOES[eid]; if (this.S.echoes[eid] || woke.length || (this.S.chapter || 1) < (EE.ch || 2)) continue;
+      for (const u of this.units.filter(u => u.side === 'enemy' && !u.fled)) if (huntMatch(EE, u.E) && Math.random() < (u.E.boss ? 0.35 : 0.03) * dropMul) { woke.push(eid); break; }
+    }
+    for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=8');
+    const { gainExp, gainBond } = await import('./party.js?v=10');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);
     const learned = gainAP(this.S, ap);
     if (this.S.meal?.n > 0) { this.S.meal.n--; if (!this.S.meal.n) this.S.meal = null; }
     this.S.battles++;
-    await this.ui.results({ exp, gil, drops, ups, bond, ap, learned });
+    await this.ui.results({ exp, gil, drops, ups, bond, ap, learned, woke });
+    for (const eid of woke) { this.G.audio.sfx('resonance'); this.G.ui.toast(`迴響水晶「<b>${ECHOES[eid].name}</b>」甦醒了！`, 3500); }
   }
 }
 
@@ -998,13 +1196,14 @@ class BattleUI {
     this.autoBtn(); this.spdBtn();
     // enemy info panels
     this.en.innerHTML = '';
-    for (const u of b.units.filter(u => u.side === 'enemy')) {
-      const d = document.createElement('div'); d.className = 'b-einfo' + (u.boss ? ' boss' : '');
-      d.innerHTML = `<div class="b-ename">${u.name}<span class="b-etr">${[...u.traits].map(t => `<i title="${TRAIT_N[t][1]}">${TRAIT_N[t][0]}</i>`).join('')}</span><span class="b-est"></span></div><div class="b-ebar"><i></i></div><div class="b-erow"><span class="b-shield"><b></b></span><span class="b-weak"></span></div>`;
-      this.en.appendChild(d); u.info = d;
-      d.onclick = () => this.pickHook && this.pickHook(u);
-    }
+    for (const u of b.units.filter(u => u.side === 'enemy')) this.addEnemy(u);
     this.refresh(); this.timeline();
+  }
+  addEnemy(u) {
+    const d = document.createElement('div'); d.className = 'b-einfo' + (u.boss ? ' boss' : '');
+    d.innerHTML = `<div class="b-ename">${u.name}<span class="b-etr">${[...u.traits].filter(t => TRAIT_N[t]).map(t => `<i title="${TRAIT_N[t][1]}：${TRAIT_N[t][2]}">${TRAIT_N[t][0]}</i>`).join('')}</span><span class="b-est"></span></div><div class="b-ebar"><i></i></div><div class="b-erow"><span class="b-shield"><b></b></span><span class="b-weak"></span></div>`;
+    this.en.appendChild(d); u.info = d;
+    d.onclick = () => this.pickHook && this.pickHook(u);
   }
   hide() { this.root.classList.remove('on'); this.root.innerHTML = ''; }
   autoBtn() { const e = this.root.querySelector('#bauto'); if (e) { e.textContent = this.b.auto ? '自動 ON' : '自動 OFF'; e.classList.toggle('lit', this.b.auto); } }
@@ -1227,6 +1426,7 @@ class BattleUI {
       if (r.drops.length) lines.push(`<div class="r-row"><span>獲得</span><b>${r.drops.map(itemName).join('、')}</b></div>`);
       for (const [id, sp] of r.learned || []) lines.push(`<div class="r-bond">${HEROES[id].name} 學會了「${SKILLS[sp].name}」！</div>`);
       for (const [id, lv, sk] of r.ups) lines.push(`<div class="r-up">${HEROES[id].name} 升到了 Lv ${lv}！${sk.length ? '　學會了 ' + sk.join('、') : ''}</div>`);
+      for (const eid of r.woke || []) lines.push(`<div class="r-bond" style="color:#ffe04a">✦ 新的迴響水晶甦醒了：${ECHOES[eid].name}</div>`);
       for (const [e, lv, got] of r.bond) lines.push(`<div class="r-bond">迴響「${ECHOES[e].short}」羈絆提升到 ${lv}！${got.length ? '　習得：' + got.join('、') : ''}</div>`);
       this.cmd.classList.remove('on');
       const box = document.createElement('div'); box.className = 'b-result'; box.innerHTML = `<h3>勝利！</h3>${lines.join('')}<div class="r-ok">▶ 繼續</div>`;

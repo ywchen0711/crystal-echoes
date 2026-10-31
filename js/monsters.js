@@ -1,7 +1,7 @@
 // The big bestiary: classic RPG monster types (original names and art), each with recoloured cousins
 // that get stronger, the way monster families grow in old console RPGs.
-import { Px, ramp, shade, mix, rnd, registerMonster } from './pixel.js?v=8';
-import { ENEMIES, SKILLS } from './data.js?v=8';
+import { Px, ramp, shade, mix, rnd, registerMonster } from './pixel.js?v=10';
+import { ENEMIES, SKILLS } from './data.js?v=10';
 
 // ---------------------------------------------------------------- art (all face left; battle flips them)
 const D = {};
@@ -341,6 +341,23 @@ const R_ = [
   ['m_drg1', '綠龍', 'dragon', 22, { body: '#4a9a4a', belly: '#e8e0a0' }, 'wind', { scale: 0.75 }], ['m_drg2', '紅龍', 'dragon', 32, { body: '#c83a2a', belly: '#ffd08a' }, 'fire', { scale: 0.8 }], ['m_drg3', '冰龍', 'dragon', 38, { body: '#a8d8f0', belly: '#ffffff', wing: '#6a9ac8' }, 'ice', { scale: 0.8 }],
   ['m_drg4', '黑龍', 'dragon', 46, { body: '#2a2a3a', belly: '#6a4a6a', eye: '#ff2a2a' }, 'dark', { scale: 0.85 }], ['m_drg5', '白金龍', 'dragon', 55, { body: '#e8e8f8', belly: '#e8c050', wing: '#c8c8e8', eye: '#4a8aff' }, 'light', { scale: 0.9 }], ['m_drg6', '骨龍', 'dragon', 42, { body: '#d8d0b8', belly: '#a89a7a', eye: '#c84aff' }, 'dark', { scale: 0.8, fam: 'undead' }],
   ['m_ser2', '海龍', 'serpent', 40, { body: '#2a5a8a', belly: '#c8e8ff', fin: '#8ae0ff' }, 'water', { scale: 0.8 }],
+  // ---- trait-built monsters: each asks for a different answer
+  ['m_x1', '影蝠', 'bat', 9, { body: '#2a2a3a', eye: '#8affff' }, 'dark', { traits: ['fly', 'stealth'] }], ['m_x2', '荊棘藤', 'plant', 10, { body: '#4a7a2a' }, 'earth', { traits: ['thorns'] }],
+  ['m_x3', '再生史萊姆', 'slime', 8, { body: '#6ad86a' }, 'water', { traits: ['regen'] }], ['m_x4', '骸骨兵', 'skeleton', 12, { body: '#e8e0c8' }, null, { traits: ['armor', 'undying'] }],
+  ['m_x5', '狼群頭目', 'wolf', 14, { body: '#5a5a6a' }, null, { traits: ['swarm', 'aura'] }], ['m_x6', '哥布林薩滿', 'goblin', 13, { body: '#6a8a3a' }, 'fire', { traits: ['summoner'], healer: true }],
+  ['m_x7', '自爆蟲', 'insect', 15, { body: '#c84a2a' }, 'fire', { traits: ['burst'] }], ['m_x8', '鏡之魔眼', 'eye', 18, { body: '#c8d8f0' }, 'light', { traits: ['fly', 'reflect'] }],
+  ['m_x9', '亡靈騎士', 'knight', 22, { body: '#3a3a4a' }, 'dark', { traits: ['armor', 'undying', 'curse'] }], ['m_x10', '幽冥燈', 'wisp', 16, { body: '#8a6aff' }, 'dark', { traits: ['ghost'] }],
+  ['m_x11', '熔岩布丁', 'pudding', 20, { body: '#e86a2a' }, 'fire', { traits: ['absorb', 'regen'] }], ['m_x12', '狂暴熊', 'beast', 21, { body: '#6a4a2a' }, null, { traits: ['enrage'] }],
+  ['m_x13', '魔導兵器', 'mech', 26, { body: '#4a5a7a', eye: '#4affff' }, 'thunder', { traits: ['armor', 'mimmune', 'burst'] }], ['m_x14', '九頭蛇', 'hydra', 30, { body: '#3a6a5a' }, 'water', { traits: ['regen', 'enrage'] }],
+  ['m_x15', '殭屍術士', 'mummy', 24, { body: '#a89a7a' }, 'dark', { traits: ['summoner', 'curse'] }], ['m_x16', '幻影刺客', 'mage', 25, { body: '#2a2a3a' }, 'dark', { traits: ['stealth', 'enrage'] }],
+  ['m_x17', '水晶魔像', 'golem', 32, { body: '#bfe8ff', core: '#8ae0ff' }, 'ice', { traits: ['armor', 'reflect'] }], ['m_x18', '惡魔軍師', 'imp', 28, { body: '#8a2a4a' }, 'dark', { traits: ['fly', 'aura', 'summoner'] }],
+  ['m_x19', '冰霜亡靈', 'ghost', 30, { body: '#c8e8ff' }, 'ice', { traits: ['fly', 'ghost', 'stealth'] }], ['m_x20', '雷霆鳥王', 'bird', 34, { body: '#ffe04a', wing: '#2a2a6a' }, 'thunder', { traits: ['fly', 'enrage', 'swarm'] }],
+  ['m_x21', '荊棘巨木', 'tree', 36, { body: '#4a3a2a' }, 'earth', { traits: ['thorns', 'regen'] }], ['m_x22', '炸彈王', 'bomb', 38, { body: '#ff3a2a' }, 'fire', { traits: ['fly', 'burst', 'summoner'], scale: 1.5 }],
+  ['m_x23', '黑曜石像鬼', 'gargoyle', 40, { body: '#2a2a3a' }, 'dark', { traits: ['fly', 'armor', 'reflect'] }], ['m_x24', '吸血伯爵', 'mage', 42, { body: '#4a1a2a' }, 'dark', { traits: ['undying', 'aura'], healer: true, fam: 'undead' }],
+  ['m_x25', '深淵章魚', 'octopus', 44, { body: '#3a2a6a' }, 'water', { traits: ['absorb', 'summoner'] }], ['m_x26', '虛空蜘蛛', 'spider', 46, { body: '#2a1a3a' }, 'dark', { traits: ['stealth', 'curse'] }],
+  ['m_x27', '古代機神', 'mech', 50, { body: '#c8a050' }, 'thunder', { traits: ['armor', 'mimmune', 'enrage', 'burst'], scale: 1.3 }], ['m_x28', '不死鳥雛', 'bird', 26, { body: '#ffb04a' }, 'fire', { traits: ['fly', 'undying', 'absorb'] }],
+  ['m_x29', '腐沼蛙', 'frog', 17, { body: '#5a7a3a' }, 'water', { traits: ['curse', 'swarm'] }], ['m_x30', '影狐', 'wolf', 19, { body: '#3a3a5a' }, 'dark', { traits: ['stealth', 'evade'] }],
+  ['m_x31', '聖騎魔像', 'golem', 44, { body: '#e8e0c8' }, 'light', { traits: ['armor', 'aura'] }], ['m_x32', '星之精', 'elemental', 38, { body: '#d8b0ff' }, 'light', { traits: ['reflect', 'regen'] }],
 ];
 export const BESTIARY_NEW = [];
 for (const [id, name, kind, lv, colors, el, ex = {}] of R_) {
@@ -351,7 +368,7 @@ for (const [id, name, kind, lv, colors, el, ex = {}] of R_) {
     atk: Math.round((12 + 2.0 * lv) * ma), def: ex.metal ? 999 : Math.round((5 + 1.0 * lv) * md), mag: Math.round((10 + 1.8 * lv) * mm), spr: ex.metal ? 999 : Math.round((5 + 0.9 * lv) * (k.resistPhys ? 1.3 : 1)), spd: Math.round((8 + 0.45 * lv) * ms * (ex.metal ? 2 : 1)),
     shield: ex.metal ? 1 : 2 + Math.floor(lv / 12) + (k.size || 1) - 1,
     weak: [], resist: [], exp: Math.max(4, Math.round(2.2 * Math.pow(lv, 1.25) * (k.size || 1) * (ex.metal ? 30 : 1))), gil: Math.round((2 * Math.pow(lv, 1.2) + 5) * (ex.gilMul || 1)),
-    drops: [], hab: k.hab, fam: ex.fam || k.fam, traits: [...(k.traitAdd || [])], el, wild: true, scale: ex.scale,
+    drops: [], hab: k.hab, fam: ex.fam || k.fam, traits: [...new Set([...(k.traitAdd || []), ...(ex.traits || [])])], fixedTraits: !!ex.traits, el, wild: true, scale: ex.scale,
   };
   if (ex.metal) { E.metal = true; E.traits.push('evade'); E.acts = [['e_metalflee', 2], ['e_tackle', 1], ['e_fire', 1]]; }
   else {

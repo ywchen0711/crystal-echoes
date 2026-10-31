@@ -1,17 +1,17 @@
 // Crystal Echoes: wires the renderer, field, battles, menus, story and saving together.
 import * as THREE from '../lib/three.module.min.js';
-import { createRenderer, createPost } from './render.js?v=8';
-import { Field, setHeroLook } from './field.js?v=8';
-import { setDepth, setPaper, setPaperCam } from './voxel.js?v=8';
-import { Battle } from './battle.js?v=8';
-import { UI, fmtTime } from './ui.js?v=8';
-import { Audio } from './audio.js?v=8';
-import { Input } from './input.js?v=8';
-import { makeStory, QUESTS } from './story.js?v=8';
-import { MAPS } from './maps.js?v=8';
-import { HEROES, ITEMS, ENEMIES } from './data.js?v=8';
-import { BESTIARY_NEW } from './content.js?v=8';
-import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=8';
+import { createRenderer, createPost } from './render.js?v=10';
+import { Field, setHeroLook } from './field.js?v=10';
+import { setDepth, setPaper, setPaperCam } from './voxel.js?v=10';
+import { Battle } from './battle.js?v=10';
+import { UI, fmtTime } from './ui.js?v=10';
+import { Audio } from './audio.js?v=10';
+import { Input } from './input.js?v=10';
+import { makeStory, QUESTS } from './story.js?v=10';
+import { MAPS } from './maps.js?v=10';
+import { HEROES, ITEMS, ENEMIES } from './data.js?v=10';
+import { BESTIARY_NEW } from './content.js?v=10';
+import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=10';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));

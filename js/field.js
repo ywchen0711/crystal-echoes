@@ -1,11 +1,12 @@
 // Walking around: maps, the leader sprite, NPCs, chests, doors, encounters, mounts and the camera.
 import * as THREE from '../lib/three.module.min.js';
-import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js?v=15';
-import { parseMap, buildMap, groundAt } from './mapbuild.js?v=15';
-import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js?v=15';
-import { VoxelPerson, isPaper } from './voxel.js?v=15';
-import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js?v=15';
-import { HEROES, ECHOES } from './data.js?v=15';
+import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js?v=16';
+import { parseMap, buildMap, groundAt } from './mapbuild.js?v=16';
+import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js?v=16';
+import { isPaper } from './voxel.js?v=16';
+import { personModel } from './paperdoll.js?v=16';
+import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js?v=16';
+import { HEROES, ECHOES } from './data.js?v=16';
 
 export const LIGHTS = {
   day: { sun: ['#fff0d8', 2.7, [0.5, 1, 0.7]], hemi: ['#c4dcff', '#8a7a5a', 1.0], exp: 1.0 },
@@ -30,7 +31,7 @@ export function lookOf(look) {
   return LOOKS[look] || HEROES[look]?.look || ECHOES[look]?.look || LOOKS.boy;
 }
 export function personSprite(look) {
-  return new VoxelPerson(lookOf(look));
+  return personModel(lookOf(look));
 }
 // little round critters for hide and seek
 function moguSheet() {
@@ -144,7 +145,16 @@ export class Field {
     const spr = personSprite(look); root.add(spr.mesh);
     const sh = blobShadow(0.38); sh.position.y = 0.02; root.add(sh);
     this.scene.add(root);
-    return { root, spr, x: 0, z: 0, y: 0, dir: 'down', anim: 0, moving: false };
+    return { root, spr, look, x: 0, z: 0, y: 0, dir: 'down', anim: 0, moving: false };
+  }
+  // new models for everyone on the map (after the character style setting changes)
+  remodel() {
+    for (const w of [this.player, ...this.npcs]) {
+      if (!w?.spr?.mesh || !w.look) continue;
+      w.root.remove(w.spr.mesh); w.spr.dispose?.();
+      w.spr = personSprite(w.look); w.spr.pop = 1; w.root.add(w.spr.mesh); this.syncWalker(w); w.spr.snapFacing?.();
+    }
+    if (this.mount) this.applyMount();
   }
   setLeader(look) { if (!this.player) return; const { x, z, dir } = this.player; this.scene.remove(this.player.root); this.player = this.makeWalker(look); this.player.spr.pop = 1; this.placePlayer(x, z, dir); }
   placePlayer(x, z, dir) { const p = this.player; p.x = x + 0.5; p.z = z + 0.5; p.dir = dir; p.ang = null; p.y = groundAt(this.map, p.x, p.z); this.syncWalker(p); p.spr.snapFacing?.(); }

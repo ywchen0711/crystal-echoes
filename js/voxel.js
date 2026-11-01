@@ -1,7 +1,7 @@
 // Voxel people and monsters: the same recipes as the pixel sprites, built as real 3D models
 // out of small cubes so they have depth, turn smoothly and swing their arms and legs.
 import * as THREE from '../lib/three.module.min.js';
-import { shade, mix } from './pixel.js?v=15';
+import { shade, mix } from './pixel.js?v=16';
 const CHAR_LAYER = 2;
 const toLayer = (root) => root.traverse((o) => o.layers.set(CHAR_LAYER));
 
@@ -714,3 +714,5 @@ function slab(px) {
   }
   return g;
 }
+// for the paper dolls (paperdoll.js), which share the weapons, poses and facing with the voxel people
+export { tintWeapon, weaponGrid, WPN_TILT, SKINS, POSES, JOINTS, DIR_ANGLE, camYaw, VS, POP_T, FLIP_T, BWIN, toLayer, renderPortrait as renderVoxelPortrait };

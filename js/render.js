@@ -5,7 +5,7 @@ import { RenderPass } from '../lib/addons/RenderPass.js';
 import { UnrealBloomPass } from '../lib/addons/UnrealBloomPass.js';
 import { OutputPass } from '../lib/addons/OutputPass.js';
 import { ShaderPass } from '../lib/addons/ShaderPass.js';
-import { texFrom } from './pixel.js?v=15';
+import { texFrom } from './pixel.js?v=16';
 import { Pass, FullScreenQuad } from '../lib/addons/Pass.js';
 
 // characters and monsters live on their own layer so they can be drawn as crisp, outlined pixel art
@@ -60,10 +60,12 @@ const Grade = {
 // Draws the character layer into a small render target (so every model becomes chunky pixels),
 // then lays it over the full-size scene with a dark one-pixel outline and a little colour banding.
 const PixelComposite = {
-  uniforms: { tDiffuse: { value: null }, tChar: { value: null }, low: { value: new THREE.Vector2(1, 1) }, outline: { value: new THREE.Vector3(0.035, 0.025, 0.07) }, outlineMix: { value: 0.6 }, levels: { value: 14 }, paper: { value: 1 }, paperCol: { value: new THREE.Vector3(0.97, 0.94, 0.87) } },
+  uniforms: { tDiffuse: { value: null }, tChar: { value: null }, low: { value: new THREE.Vector2(1, 1) }, outline: { value: new THREE.Vector3(0.035, 0.025, 0.07) }, outlineMix: { value: 0.6 }, levels: { value: 14 }, paper: { value: 1 }, mw: { value: 1 }, paperCol: { value: new THREE.Vector3(0.97, 0.94, 0.87) } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `uniform sampler2D tDiffuse, tChar; uniform vec2 low; uniform vec3 outline, paperCol; uniform float levels, outlineMix, paper; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse, tChar; uniform vec2 low; uniform vec3 outline, paperCol; uniform float levels, outlineMix, paper, mw; varying vec2 vUv;
     #define A(x, y) texture2D(tChar, uv + vec2(x, y) * px).a
+    // the most opaque character pixel on a circle of radius r (in low-res pixels) round uv
+    float ring(vec2 uv, vec2 px, float r) { float m = 0.0; for (int i = 0; i < 12; i++) { float a = float(i) * 0.5235988; m = max(m, texture2D(tChar, uv + vec2(cos(a), sin(a)) * r * px).a); } return m; }
     float hsh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
@@ -76,15 +78,13 @@ const PixelComposite = {
           gl_FragColor = vec4(g * g * (0.97 + 0.05 * gr), 1.0); return;
         }
         // the white margin left around a cut-out figure
-        float n1 = max(max(max(A(1.0, 0.0), A(-1.0, 0.0)), max(A(0.0, 1.0), A(0.0, -1.0))), max(max(A(1.0, 1.0), A(-1.0, 1.0)), max(A(1.0, -1.0), A(-1.0, -1.0))));
-        n1 = max(n1, max(max(A(2.0, 0.0), A(-2.0, 0.0)), max(A(0.0, 2.0), A(0.0, -2.0))));
+        float n1 = max(ring(uv, px, mw), ring(uv, px, 2.0 * mw));
         if (n1 > 0.5) { gl_FragColor = vec4(paperCol * (0.95 + 0.06 * gr), 1.0); return; }
         // the scissor edge
-        float n2 = max(max(max(A(2.0, 1.0), A(-2.0, 1.0)), max(A(2.0, -1.0), A(-2.0, -1.0))), max(max(A(1.0, 2.0), A(-1.0, 2.0)), max(A(1.0, -2.0), A(-1.0, -2.0))));
-        n2 = max(n2, max(max(A(3.0, 0.0), A(-3.0, 0.0)), max(A(0.0, 3.0), A(0.0, -3.0))));
+        float n2 = ring(uv, px, 3.0 * mw);
         if (n2 > 0.5) { gl_FragColor = vec4(mix(base.rgb, outline, 0.55), 1.0); return; }
         // the card's soft shadow on the page behind it
-        float sh = (A(-3.0, 4.0) + A(-4.0, 5.0) + A(-3.0, 6.0) + A(-5.0, 4.0)) * 0.25;
+        float sh = (A(-3.0 * mw, 4.0 * mw) + A(-4.0 * mw, 5.0 * mw) + A(-3.0 * mw, 6.0 * mw) + A(-5.0 * mw, 4.0 * mw)) * 0.25;
         gl_FragColor = vec4(base.rgb * (1.0 - 0.32 * sh), base.a); return;
       }
       if (c.a < 0.5) {
@@ -100,7 +100,7 @@ const PixelComposite = {
 export class PixelCharPass extends Pass {
   constructor(scene, camera) {
     super();
-    this.scene = scene; this.camera = camera; this.factor = 3; this.enabled = true; this.style = 0;
+    this.scene = scene; this.camera = camera; this.factor = 3; this.enabled = true; this.style = 0; this.paper = true;
     this.rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
     this.depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
     this.mat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(PixelComposite.uniforms), vertexShader: PixelComposite.vertexShader, fragmentShader: PixelComposite.fragmentShader, depthTest: false, depthWrite: false });
@@ -112,10 +112,12 @@ export class PixelCharPass extends Pass {
     // style 0 fine (soft, detailed), 1 standard, 2 retro (chunky, Octopath-like)
     const div = [470, 320, 230][this.style] || 470;
     this.factor = Math.max(this.style === 0 ? 1.5 : 2, h / div);
+    // paper dolls are drawn by hand: in the fine style they keep (nearly) full resolution, the white margin scaled to match
+    if (this.paper && this.style === 0) this.factor = Math.max(1, h / 900);
     this.mat.uniforms.levels.value = [40, 22, 14][this.style] || 40;
     this.mat.uniforms.outlineMix.value = [0.5, 0.72, 0.88][this.style] || 0.5;
     const lw = Math.max(1, Math.floor(w / this.factor)), lh = Math.max(1, Math.floor(h / this.factor));
-    this.rt.setSize(lw, lh); this.mat.uniforms.low.value.set(lw, lh);
+    this.rt.setSize(lw, lh); this.mat.uniforms.low.value.set(lw, lh); this.mat.uniforms.mw.value = Math.max(1, lh / 470);
   }
   // lights and the sun's shadow camera must see the character layer too
   prepLights() {
@@ -173,7 +175,7 @@ export function createPost(renderer, scene, camera) {
     },
     tilt(focus, band, amount) { for (const p of [tsH, tsV]) { p.uniforms.focus.value = focus; p.uniforms.band.value = band; p.uniforms.amount.value = amount; } },
     setPixelStyle(v) { px.style = v; px.enabled = v !== 3; px.setSize(px.w, px.h); },
-    setPaper(on) { px.mat.uniforms.paper.value = on ? 1 : 0; grade.uniforms.paper.value = on ? 1 : 0; },
+    setPaper(on) { px.mat.uniforms.paper.value = on ? 1 : 0; grade.uniforms.paper.value = on ? 1 : 0; px.paper = on; px.setSize(px.w, px.h); },
     setCamera(cam) { rp.camera = cam; px.camera = cam; },
     setScene(sc) { rp.scene = sc; px.scene = sc; },
   };

@@ -1,19 +1,19 @@
 // Crystal Echoes: wires the renderer, field, battles, menus, story and saving together.
 import * as THREE from '../lib/three.module.min.js';
-import { createRenderer, createPost } from './render.js?v=15';
-import { Field, setHeroLook } from './field.js?v=15';
-import { setDepth, setPaper, setPaperCam } from './voxel.js?v=15';
-import { Battle } from './battle.js?v=15';
-import { UI, fmtTime } from './ui.js?v=15';
-import { Audio } from './audio.js?v=15';
-import { Input } from './input.js?v=15';
-import { makeStory, QUESTS } from './story.js?v=15';
-import { MAPS } from './maps.js?v=15';
-import { AutoMap } from './automap.js?v=15';
-import { Grind } from './grind.js?v=15';
-import { HEROES, ITEMS, ENEMIES } from './data.js?v=15';
-import { BESTIARY_NEW } from './content.js?v=15';
-import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=15';
+import { createRenderer, createPost } from './render.js?v=16';
+import { Field, setHeroLook } from './field.js?v=16';
+import { setDepth, setPaper, setPaperCam } from './voxel.js?v=16';
+import { Battle } from './battle.js?v=16';
+import { UI, fmtTime } from './ui.js?v=16';
+import { Audio } from './audio.js?v=16';
+import { Input } from './input.js?v=16';
+import { makeStory, QUESTS } from './story.js?v=16';
+import { MAPS } from './maps.js?v=16';
+import { AutoMap } from './automap.js?v=16';
+import { Grind } from './grind.js?v=16';
+import { HEROES, ITEMS, ENEMIES } from './data.js?v=16';
+import { BESTIARY_NEW } from './content.js?v=16';
+import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=16';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -134,6 +134,9 @@ class Game {
     this.post.setPixelStyle(st.pixel ?? 0);
     document.body.classList.toggle('nominimap', st.minimap === false);
     const dv = st.depth ?? 0; setDepth(dv || 0.6); setPaper(dv === 0); this.post.setPaper(dv === 0);
+    // switching between paper dolls and voxel people rebuilds the people already standing about
+    if (this._paper !== undefined && this._paper !== (dv === 0)) this.field?.remodel?.();
+    this._paper = dv === 0;
   }
 
   // ---------------------------------------------------------------- field input

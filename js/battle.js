@@ -1,14 +1,15 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
-import { balanceFor } from './balance.js?v=15';
+import { balanceFor } from './balance.js?v=16';
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=15';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=15';
-import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=15';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=15';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=15';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=15';
-import { lookOf } from './field.js?v=15';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=15';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=16';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=16';
+import { VoxelSprite } from './voxel.js?v=16';
+import { personModel, renderPortrait } from './paperdoll.js?v=16';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=16';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=16';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=16';
+import { lookOf } from './field.js?v=16';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=16';
 
 const ENEMY_DMG = 1.55;
 // what the story's bosses say when they drop below half
@@ -93,7 +94,7 @@ export class Battle {
     P.forEach((id, i) => {
       const h = this.S.heroes[id], st = heroStats(this.S, id);
       const look = lookOf(id);
-      const spr = new VoxelPerson(look, { scale: 1.25, battle: true, angle: -Math.PI / 2 + 0.45, glow: 0.12 });
+      const spr = personModel(look, { scale: 1.25, battle: true, angle: -Math.PI / 2 + 0.45, glow: 0.12 });
       const fx = gearFx(this.S, id), hs = hands(this.S, id), shields = shieldOf(this.S, id);
       const u = { side: 'party', id, name: HEROES[id].name, hero: id, lv: h.lv, st, hp: Math.max(0, Math.min(h.hp, st.hp)), mp: Math.min(h.mp, st.mp), wpn: hs[0].type, hands: hs, fx, on: h.on || [], echo: h.echo, limit: h.limit || 0, buffs: {}, status: {}, spr, home: slots[i], survived: false, color: HEROES[id].color, immuneSet: new Set(fx.immune || []), block: Math.min(0.6, shields.reduce((a, g) => a + (g.fx?.block || 0), 0)), mblock: shields.reduce((a, g) => a + (g.fx?.mblock || 0), 0), barrier: {} };
       u.key = h.echo ? ECHOES[h.echo]?.key : null;
@@ -1252,7 +1253,7 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=15');
+    const { gainExp, gainBond } = await import('./party.js?v=16');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);

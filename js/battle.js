@@ -1,15 +1,22 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
+import { balanceFor } from './balance.js?v=15';
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=14';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=14';
-import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=14';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=14';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=14';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=14';
-import { lookOf } from './field.js?v=14';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=14';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=15';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=15';
+import { VoxelPerson, VoxelSprite, renderPortrait } from './voxel.js?v=15';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=15';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=15';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=15';
+import { lookOf } from './field.js?v=15';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=15';
 
 const ENEMY_DMG = 1.55;
+// what the story's bosses say when they drop below half
+const BOSS_HALF = {
+  rottree: '……好痛……好黑……', tia: '風啊，再吹大一點！把他們的回憶全部吹散！', serene: '十年……我守了十年，誰都沒有看我一眼！', leviath: '（水神之影發出了悲傷的低吼）',
+  vahl: '那張圖是我畫的！我畫的！', saren: '燈……那天晚上的燈，為什麼沒有人記得！', silent: '一千年……你們知道一千年有多長嗎！', silence: '…………………………',
+  bigfang: '（狼王的眼睛變紅了）', irongolem: '（核心發出了刺耳的警報聲）', kingcrab: '（霸王蟹把鉗子舉得更高了）',
+};
 const EL_OPP = { fire: 'ice', ice: 'fire', thunder: 'water', water: 'thunder', wind: 'earth', earth: 'wind', light: 'dark', dark: 'light' };
 const EL_RING = ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'];
 const BG = {
@@ -125,6 +132,7 @@ export class Battle {
     const scale = (E.boss ? 1.25 : 1.05) * (E.scale || 1);
     const spr = new VoxelSprite(px, { scale });
     const st = { hp: E.hp, mp: 999, atk: E.atk, def: E.def, mag: E.mag, spr: E.spr, spd: E.spd };
+    const bal = balanceFor(eid, E, this.G.S.settings.diff); st.hp = Math.round(st.hp * bal[0]); st.atk = Math.round(st.atk * bal[1]); st.mag = Math.round(st.mag * bal[1]);
     if (opts.hard) for (const k of ['hp', 'atk', 'def', 'mag', 'spr']) st[k] = Math.round(st[k] * opts.hard);
     const u = { side: 'enemy', fam: E.fam, traits: new Set(E.traits || []), barrier: {}, id: eid, E, name: E.name + suffix, lv: E.lv, st, hp: st.hp, mp: 999, shield: E.shield, maxShield: E.shield, weak: E.weak, resist: E.resist || [], revealed: new Set(this.S.flags['seen_' + eid] || []), buffs: {}, status: {}, spr, alive: true, broken: false, brokenUntil: -1, boss: !!E.boss, home: pos };
     if (u.traits.has('reflect')) u.status.reflect = 99;
@@ -917,6 +925,7 @@ export class Battle {
     t.hp = Math.max(0, t.hp - d);
     if (t.status.sleep && Math.random() < 0.5) delete t.status.sleep;
     if (t.status.confuse && Math.random() < 0.3) delete t.status.confuse;
+    if (t.side === 'enemy' && t.boss && !t.halfSaid && t.hp > 0 && t.hp <= t.st.hp * 0.5 && BOSS_HALF[t.id]) { t.halfSaid = true; this.msg(`${t.E.name}：「${BOSS_HALF[t.id]}」`); }
     if (t.side === 'enemy' && t.traits?.has('enrage') && !t.enraged && t.hp > 0 && t.hp <= t.st.hp * 0.5) { t.enraged = true; t.status.enraged = 99; this.pop(t, '狂暴化！', '#ff4a3a', true); }
     if (t.hp <= 0 && t.side === 'party' && !this.rewindUsed && this.hasKey('gears') && (t.roundHp || 0) > 0) { this.rewindUsed = true; t.hp = Math.max(1, t.roundHp); this.pop(t, '時間倒流！', '#e8d08a', true); }
     if (t.hp <= 0 && t.side === 'party' && t.fx?.survive && !t.survived2) { t.hp = 1; t.survived2 = true; this.pop(t, '不屈！', '#ffb04a'); }
@@ -1243,7 +1252,7 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=14');
+    const { gainExp, gainBond } = await import('./party.js?v=15');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);

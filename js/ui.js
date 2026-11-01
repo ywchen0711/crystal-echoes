@@ -1,14 +1,15 @@
 // Menus and windows: dialogue, choices, the main menu, shops, inns, notices and little overlays.
-import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js?v=14';
-import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js?v=14';
-import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js?v=14';
-import { ENEMIES } from './data.js?v=14';
-import { GRIND_DEFAULT, GRIND_OPTS } from './grind.js?v=14';
-import { STATE_N, STATE_DESC, REACTIONS, PAIRS, SETS, setBonus, huntText, NEW_ECHOES } from './depth.js?v=14';
-import { monsterPx } from './pixel.js?v=14';
-import { personSheet, battleSheet } from './pixel.js?v=14';
-import { lookOf } from './field.js?v=14';
-import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js?v=14';
+import { DIFF, DIFF_ORDER, balanceFor } from './balance.js?v=15';
+import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, ECHO_ORDER, EXP_NEXT, SUMMONS, STAR_COST, BOND_EXP, ELEM, WPN, ICON } from './data.js?v=15';
+import { heroStats, skillsOf, apUsed, apCap, equip, canEquip, setEcho, togglePassive, starUp, ownedEchoes, itemName, addItem, echoSkills, EQUIP_SLOTS, SLOT_N, slotFits, gearFx, artsOf, spellsOf, masteryLv, hands, paperLook, itemLook, gearLook } from './party.js?v=15';
+import { WTYPES, fxText, ITEM_CATS, SCHOOL_N, ARTS_BY_TYPE, MASTERY_AT, STYLE_N, APT, SHIELD_KINDS, TIER_N, FAM_N, TRAIT_N, DROP_N } from './content.js?v=15';
+import { ENEMIES } from './data.js?v=15';
+import { GRIND_DEFAULT, GRIND_OPTS } from './grind.js?v=15';
+import { STATE_N, STATE_DESC, REACTIONS, PAIRS, SETS, setBonus, huntText, NEW_ECHOES } from './depth.js?v=15';
+import { monsterPx } from './pixel.js?v=15';
+import { personSheet, battleSheet } from './pixel.js?v=15';
+import { lookOf } from './field.js?v=15';
+import { renderPortrait, renderWeaponIcon, setDepth } from './voxel.js?v=15';
 
 const $ = (s) => document.querySelector(s);
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -421,7 +422,7 @@ export class UI {
     const S = this.S, I = ITEMS[id];
     if (!I || !I.use || I.use.dmg || I.use.escape || I.use.status && !I.use.self || I.use.analyze || I.use.cast || I.use.buff || I.use.evadeT) { if (I?.use) this.toast('戰鬥中才能使用'); return; }
     const spend = () => { S.items[id]--; if (!S.items[id]) delete S.items[id]; this.hud(); };
-    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js?v=14'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
+    if (I.use.tent) { if (!this.G.nearSave()) { this.toast('要在存檔水晶旁使用'); return; } spend(); const { healAll } = await import('./party.js?v=15'); healAll(S); this.G.audio.sfx('heal'); this.toast('全員完全回復了！'); return; }
     if (I.use.meal) { S.meal = { fx: I.use.meal, n: 5, name: I.name }; spend(); this.G.audio.sfx('heal'); this.toast(`吃了${I.name}！之後5場戰鬥都有效果`); return; }
     if (I.use.repel) { S.repel = I.use.repel; S.lure = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人不會靠近了'); return; }
     if (I.use.lure) { S.lure = I.use.lure; S.repel = 0; spend(); this.G.audio.sfx('item'); this.toast('敵人更容易出現了'); return; }
@@ -489,7 +490,7 @@ export class UI {
         const id = list[n], E = ENEMIES[id], k = kills[id] || 0;
         if (!k && !S.flags['seen_' + id]) return '<div class="gi"><h4>？？？</h4><p>還沒有遇過。</p></div>';
         const rev = new Set(S.flags['seen_' + id] || []); const weak = k >= 3 ? E.weak : E.weak.filter(w => rev.has(w));
-        return `<div class="gi bst"><img src="${pic(id)}"><h4>${E.name}${E.boss ? '　〔頭目〕' : ''}</h4><div class="gi-kind">Lv ${E.lv}　${FAM_N[E.fam] || ''}系　HP ${E.hp}　打倒 ${k} 隻</div>
+        return `<div class="gi bst"><img src="${pic(id)}"><h4>${E.name}${E.boss ? '　〔頭目〕' : ''}</h4><div class="gi-kind">Lv ${E.lv}　${FAM_N[E.fam] || ''}系　HP ${Math.round(E.hp * balanceFor(id, E, S.settings.diff)[0])}　打倒 ${k} 隻</div>
           <div>${E.traits.map(t => TRAIT_N[t] ? `<div class="gi-trait">${TRAIT_N[t][0]} ${TRAIT_N[t][1]}：${TRAIT_N[t][2]}</div>` : '').join('')}</div>
           <div>弱點：${weak.map(w => ICON[w] || w).join(' ') || '？'}${E.weak.length > weak.length ? ' ？' : ''}　${E.resist?.length ? '抗性：' + E.resist.map(w => ICON[w] || w).join(' ') : ''}</div>
           <div class="bst-drops">${(E.drops || []).map(([d, ch], s) => `<div><small>${DROP_N[s]}</small>${k ? (seen[id + ':' + s] ? '✓ ' : '') + itemName(d) : '？？？'}${k ? `<em>${ch >= 1 ? '必定' : Math.round(ch * 1000) / 10 + '%'}</em>` : ''}</div>`).join('')}</div>
@@ -535,6 +536,7 @@ export class UI {
         { label: '文字速度', sub: (st.textSpeed || 28) <= 12 ? '快' : (st.textSpeed || 28) >= 40 ? '慢' : '普通' },
         { label: '遇敵', sub: this.G.encMul === 0.5 ? '較少' : '普通' },
         { label: '小地圖', sub: st.minimap === false ? '關' : '開' },
+        { label: '難度', sub: DIFF[st.diff || 'normal'].name, desc: '輕鬆：敵人較弱，適合想看故事的人／普通：要想策略／困難：給熟練的玩家' },
       ], { title: '設定（左右鍵調整，或點兩下）', start: this._setStart || 0, still: this._again, lr: (k, d) => { this.adjust(k, d); this.G.applySettings(); this._setStart = k; return 'close'; } });
       this._again = i >= 0 || i === -2;
       if (i === -2) continue;
@@ -553,6 +555,7 @@ export class UI {
     if (i === 6) st.textSpeed = (st.textSpeed || 28) === 28 ? 10 : (st.textSpeed || 28) === 10 ? 45 : 28;
     if (i === 7) { this.G.encMul = this.G.encMul === 0.5 ? 1 : 0.5; st.enc = this.G.encMul; }
     if (i === 8) st.minimap = st.minimap === false;
+    if (i === 9) { const o = DIFF_ORDER; st.diff = o[(o.indexOf(st.diff || 'normal') + (d > 0 ? 1 : o.length - 1)) % o.length]; this.toast(`難度：${DIFF[st.diff].name}（下一場戰鬥開始生效）`); }
     this.G.applySettings();
   }
 
@@ -658,7 +661,7 @@ export class UI {
     if (S.gil < price) { await this.say('旅店老闆', '哎呀，錢好像不夠呢……', 'innkeep'); return false; }
     S.gil -= price;
     this.G.audio.music(null); await this.fade(1, 700);
-    const { healAll } = await import('./party.js?v=14'); healAll(S);
+    const { healAll } = await import('./party.js?v=15'); healAll(S);
     this.G.audio.sfx('save'); await wait(1200);
     await this.fade(0, 700); this.G.audio.music(this.G.field.def.bgm || this.G.field.theme.bgm);
     await this.say('旅店老闆', '早安！昨晚睡得好嗎？路上小心喔。', 'innkeep');

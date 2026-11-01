@@ -126,6 +126,7 @@ export const MAPS = {};
       npc(31, 16, 'port_jumprope', 'child2', { dir: 'left' }),
       npc(29, 3, 'port_collector', 'scholar', { dir: 'down' }),
       npc(18, 13, 'talo_stall', 'talo', { dir: 'down', hero: 'talo', cond: '!talo_joined' }),
+      npc(20, 22, 'port_angler', 'fisher', { dir: 'down' }), { k: 'sign', x: 22, z: 22, id: 'fish_port', text: '釣魚點' }, { k: 'sign', x: 26, z: 25, id: 'keeper_plaque' },
       npc(15, 11 + 3, 'board_hint', null, { hidden: true }),
       ev(28, 23, 3, 3, 'lighthouse_gate', { cond: '!lighthouse_open' }),
       { k: 'tablet', x: 2, z: 1, id: 'tab_port1' }, { k: 'tablet', x: 31, z: 26 - 1, id: 'tab_port2' },
@@ -174,7 +175,8 @@ interior('temple_port', '海潮神殿', ['port', 20, 6], {
 interior('lighthouse', '燈塔頂', ['port', 28, 26], {
   theme: 'sanctum', w: 13, d: 9,
   objs: [{ k: 'bigcrystal', x: 5, z: 2, color: '#6ad8ff', id: 'tidecrystal' }, { k: 'pillar', x: 2, z: 2 }, { k: 'pillar', x: 10, z: 2 }, { k: 'torch', x: 2, z: 6 }, { k: 'torch', x: 10, z: 6 },
-    ev(3, 5, 7, 1, 'lighthouse_scene', { cond: '!saren_met' })],
+    ev(3, 5, 7, 1, 'lighthouse_scene', { cond: '!saren_met' }), ev(4, 3, 3, 1, 'keeper_log', { cond: 'q_keeper_taken&!q_keeper_ready&!q_keeper_done' }),
+    ev(3, 6, 7, 1, 'saren_lamp', { cond: 'q_keeper_ready&cleared&!saren_keeper' }), npc(8, 3, 'lighthouse_saren', 'cultist', { dir: 'down', cond: 'saren_keeper' })],
 });
 
 // sanctum interior (one per echo; the echo id comes from the warp)
@@ -296,6 +298,7 @@ for (const [id, echo, back] of [['sanc_kaz', 'kaz', ['world', 18, 39]], ['sanc_l
       { k: 'reeds', x: 18, z: 27 }, { k: 'reeds', x: 25, z: 31 }, { k: 'rock', x: 12, z: 28 }, { k: 'rock', x: 7, z: 21 }, { k: 'flowers', x: 15, z: 31 }, { k: 'flowers', x: 9, z: 19 },
       { k: 'tablet', x: 4, z: 27, id: 'tab_f1' },
       npc(11, 22, 'forest_hunter', 'guard', { dir: 'down' }),
+      { k: 'statue', x: 3, z: 31, id: 'memorial_forest', weapon: 'sword', hair: 'short' },
     ],
     enc: { troops: [['fwolf', 'fwolf'], ['poisonbud', 'goblin'], ['wisp', 'fwolf'], ['goblin', 'goblin'], ['wisp', 'poisonbud', 'wisp']], lv: 6 }, encRate: 26,
     spawn: [14, 31, 'up'],
@@ -400,7 +403,7 @@ interior('workshop_in', '蕾娜的工房', ['anvil', 7, 7], {
       chest(2, 27, 'c_m1a', 'hipotion'), chest(22, 26, 'c_m1b', 'x_charm'), chest(21, 5, 'c_m1c', 'ether'), chest(7, 16, 'c_m1d', null, { gil: 800 }),
       { k: 'crate', x: 14, z: 28 }, { k: 'crate', x: 4, z: 21 }, { k: 'barrel', x: 8, z: 21 }, { k: 'gear', x: 20, z: 9, r: 0.6, spin: 0.8 },
       { k: 'deco', x: 7, z: 17, sprite: 'crystal', colors: { color: '#8affb0' }, scale: 0.8 }, { k: 'deco', x: 5, z: 19, sprite: 'crystal', colors: { color: '#8affb0' }, scale: 0.6 },
-      { k: 'tablet', x: 23, z: 24, id: 'tab_m1' },
+      { k: 'tablet', x: 23, z: 24, id: 'tab_m1' }, { k: 'statue', x: 1, z: 25, id: 'memorial_mine', weapon: 'bow', hair: 'ponytail' },
       ev(22, 23, 3, 3, 'golem_boss', { cond: 'q_golem_taken&!q_golem_done', battle: true }),
     ],
     enc: { troops: [['minebat', 'minebat'], ['skeleton', 'minebat'], ['sentry'], ['windsprite', 'skeleton'], ['skeleton', 'skeleton', 'minebat']], lv: 12 }, encRate: 24,
@@ -472,6 +475,8 @@ interior('workshop_in', '蕾娜的工房', ['anvil', 7, 7], {
       npc(5, 23, 'azur_girl', 'girl', { dir: 'right', wander: true }),
       npc(31, 23, 'azur_fisher', 'fisher', { dir: 'down' }),
       npc(4, 5, 'azur_garden', 'oldwoman', { dir: 'down' }),
+      npc(33, 4, 'academy_dean', 'scholar', { dir: 'down' }), { k: 'sign', x: 34, z: 3, id: 'academy_motto' }, { k: 'sign', x: 12, z: 24, id: 'fish_azur', text: '釣魚點' },
+      npc(5, 6, 'azur_serene', { skin: 'pale', hair: '#8ae0ff', hairStyle: 'long', top: '#3a5ab8', top2: '#f4e8ff', legs: '#3a5ab8', boots: '#2a2a4a', robe: true, hat: 'hood', hatColor: '#2a3a8a', weapon: 'rod' }, { dir: 'down', cond: 'serene_back' }),
       npc(28, 13, 'neo_npc', 'neo', { hero: 'neo', dir: 'down', cond: 'ch3&!neo_joined' }),
       { k: 'board', x: 22, z: 20, id: 'board_azur' },
       { k: 'tablet', x: 33, z: 27 - 3, id: 'tab_z1' },
@@ -504,7 +509,7 @@ interior('palace_in', '水守之殿', ['azurelle', 18, 7], {
       { k: 'torch', x: 4, z: 23 }, { k: 'torch', x: 21, z: 23 }, { k: 'torch', x: 10, z: 12 }, { k: 'torch', x: 14, z: 12 },
       chest(2, 27, 'c_t1a', 'hiether'), chest(23, 27, 'c_t1b', 'a_silk'), chest(22, 5, 'c_t1c', 'shard'), chest(5, 7, 'c_t1d', 'w_trident'),
       { k: 'deco', x: 18, z: 9, sprite: 'crystal', colors: { color: '#4ac8f0' }, scale: 0.8 },
-      { k: 'tablet', x: 2, z: 17, id: 'tab_t1' },
+      { k: 'tablet', x: 2, z: 17, id: 'tab_t1' }, { k: 'statue', x: 2, z: 4, id: 'memorial_temple', weapon: 'axe', hair: 'bob', shield: true },
     ],
     enc: { troops: [['drowned', 'eel'], ['deepmage', 'drowned'], ['eel', 'eel'], ['drowned', 'deepmage', 'eel']], lv: 19 }, encRate: 24,
     spawn: [12, 29, 'up'],
@@ -565,7 +570,7 @@ skyMap('sky3', '浮空遺跡・緘默之座', 'skyDark', (g) => {
   warp(13, 28, 3, 1, 'sky2', 14, 1, 'down'),
   { k: 'pillar', x: 8, z: 7 }, { k: 'pillar', x: 20, z: 7 }, { k: 'pillar', x: 8, z: 13 }, { k: 'pillar', x: 20, z: 13 },
   save(17, 25), { k: 'bigcrystal', x: 13, z: 5, color: '#c8a0ff', id: 'voidcrystal' },
-  ev(10, 12, 9, 1, 'finale', { cond: '!finale_done' }),
+  ev(10, 12, 9, 1, 'finale', { cond: '!finale_done' }), ev(10, 7, 10, 1, 'ores_crystal', { cond: 'q_ig_taken&!ores_rest' }),
 ], null, [14, 26, 'up'], { tall: 29 });
 
 // seal sites and trials reuse a small arena map built on the fly

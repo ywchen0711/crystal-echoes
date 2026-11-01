@@ -1,19 +1,19 @@
 // Crystal Echoes: wires the renderer, field, battles, menus, story and saving together.
 import * as THREE from '../lib/three.module.min.js';
-import { createRenderer, createPost } from './render.js?v=14';
-import { Field, setHeroLook } from './field.js?v=14';
-import { setDepth, setPaper, setPaperCam } from './voxel.js?v=14';
-import { Battle } from './battle.js?v=14';
-import { UI, fmtTime } from './ui.js?v=14';
-import { Audio } from './audio.js?v=14';
-import { Input } from './input.js?v=14';
-import { makeStory, QUESTS } from './story.js?v=14';
-import { MAPS } from './maps.js?v=14';
-import { AutoMap } from './automap.js?v=14';
-import { Grind } from './grind.js?v=14';
-import { HEROES, ITEMS, ENEMIES } from './data.js?v=14';
-import { BESTIARY_NEW } from './content.js?v=14';
-import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=14';
+import { createRenderer, createPost } from './render.js?v=15';
+import { Field, setHeroLook } from './field.js?v=15';
+import { setDepth, setPaper, setPaperCam } from './voxel.js?v=15';
+import { Battle } from './battle.js?v=15';
+import { UI, fmtTime } from './ui.js?v=15';
+import { Audio } from './audio.js?v=15';
+import { Input } from './input.js?v=15';
+import { makeStory, QUESTS } from './story.js?v=15';
+import { MAPS } from './maps.js?v=15';
+import { AutoMap } from './automap.js?v=15';
+import { Grind } from './grind.js?v=15';
+import { HEROES, ITEMS, ENEMIES } from './data.js?v=15';
+import { BESTIARY_NEW } from './content.js?v=15';
+import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=15';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -199,7 +199,7 @@ class Game {
           if (item === 'k_necklace' && this.S.quests.q_necklace === 'taken') this.ui.toast('找到了莉莉的項鍊！回港口交給她吧');
         }
       } else if (it.kind === 'board') await this.story.board(it.id);
-      else if (it.kind === 'sign') await this.ui.say('', it.text || '……', null);
+      else if (it.kind === 'sign') { if (it.id && this.story.SIGNS?.[it.id]) await this.story.SIGNS[it.id](); else await this.ui.say('', it.text || '……', null); }
       else if (it.kind === 'save') {
         healAll(this.S); this.audio.sfx('save'); this.ui.hud();
         if (await this.ui.yesno('存檔水晶溫柔地發著光。\n隊伍的HP與MP完全回復了。\n要存檔嗎？')) { this.save(); this.ui.toast('已存檔'); }

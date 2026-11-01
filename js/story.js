@@ -1,7 +1,8 @@
 // The story, every conversation, side quests, sanctum trials, minigames and the shops' stock.
-import { HEROES, ECHOES, SKILLS, ITEMS, GEAR, ENEMIES, ARENA, SUMMONS } from './data.js?v=14';
-import { addHero, addEcho, setEcho, addItem, itemName, healAll, heroStats } from './party.js?v=14';
-import { GEAR_BY_TIER, SPELLS } from './content.js?v=14';
+import { HEROES, ECHOES, SKILLS, ITEMS, GEAR, ENEMIES, ARENA, SUMMONS } from './data.js?v=15';
+import { addHero, addEcho, setEcho, addItem, itemName, healAll, heroStats } from './party.js?v=15';
+import { GEAR_BY_TIER, SPELLS } from './content.js?v=15';
+import { sideStory, SIDE_QUESTS } from './sidestory.js?v=15';
 
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -42,6 +43,7 @@ export const QUESTS = {
   q_whale: { name: '鯨之歌', board: 'board_azur', from: '湖邊的詩人', desc: '湖的東南角有一片淺灘，夜裡會聽見巨鯨的歌聲。騎著機械鳥去看看吧。', rewardText: '召喚獸「潮鯨 滄溟」', reward: {}, after: 'bird' },
   q_hawk: { name: '雷鳴峰的守護者', board: 'board_azur', from: '天文學者', desc: '山脈中央有一座只能從天空抵達的高峰，雷鷹「雷翼」在那裡築巢。', rewardText: '召喚獸「雷鷹 雷翼」', reward: {}, after: 'airship_built' },
 };
+Object.assign(QUESTS, SIDE_QUESTS);
 
 // ---------------------------------------------------------------- objectives per story step
 export function objectiveText(G) {
@@ -82,6 +84,7 @@ export function makeStory(G) {
   const leader = () => HEROES[S().party[0]].name;
   const quest = (q) => S().quests[q];
   const setQ = (q, v) => { S().quests[q] = v; G.field.refreshBubbles(); };
+  let side; // the side story, made once the helpers below exist
 
   async function rewardQuest(q) {
     const Q = QUESTS[q]; setQ(q, 'done');
@@ -97,6 +100,8 @@ export function makeStory(G) {
   const gearOrSmith = async (list, title, maxTier) => {
     for (;;) { const c = await ui.choose([{ label: '買賣裝備' }, { label: '強化・鑲嵌' }], { title, cls: 'small' }); if (c < 0) return; if (c === 0) await ui.shop(list, title); else await ui.smith(maxTier); }
   };
+
+  side = sideStory(G, { say, narr, flag, give, gil, battle, echo, quest, setQ, player, F, S, ui, wait });
 
   // ---------------------------------------------------------------- events (map triggers)
   const EV = {
@@ -145,6 +150,8 @@ export function makeStory(G) {
       G.camShake?.(0.5);
       const cr = G.field.built.props.find(p => p.id === 'tidecrystal'); if (cr) { cr.mat.emissiveIntensity = 0.2; cr.mat.color.set('#5a7a8a'); }
       G.audio.sfx('break');
+      await say('灰燼的薩倫', '……這座燈塔，還是跟以前一樣亮啊。', 'cultist');
+      await say('塔洛', '以前？', 'talo');
       await say('灰燼的薩倫', '水晶已經裂開了。陪我的獵犬們玩玩吧。', 'cultist');
       ui.toast('戰鬥提示：攻擊敵人的<b>弱點</b>可以削減「破防值」！', 4000);
       const r = await battle(['ashhound', 'ashhound'], { bg: 'temple', noFlee: true, tutorial: 'break' });
@@ -198,6 +205,8 @@ export function makeStory(G) {
       if (r !== 'win') return;
       flag('tia_done');
       await say('嵐羽的緹雅', '……可惡，我竟然輸了。\n不過沒關係，「無聲者」大人說過，大水晶不只這一顆。', tia.def.look);
+      await say('蕾娜', '你為什麼要討厭回憶？大家都只是想好好工作而已！', 'rena');
+      await say('嵐羽的緹雅', '……我出生的村子在一場大風裡被吹走了。後來的地圖上，那裡畫的是一片草原。\n連地圖都不記得的地方，回憶又有什麼用。', tia.def.look);
       G.field.removeNpc('tia'); G.audio.sfx('flee');
       await narr('風之大水晶重新發出了明亮的綠光。\n礦坑裡吹起了溫柔的風。');
       await say('蕾娜', '啾比！你怎麼了——啾比在發光！', 'rena');
@@ -239,11 +248,14 @@ export function makeStory(G) {
       const sa = G.field.addNpc({ id: 'saren', look: 'cultist', x: 14, z: 15, dir: 'down' });
       await say('灰燼的薩倫', '真沒想到，你們真的追到天上來了。', 'cultist');
       await say('艾倫', '薩倫！你們到底想做什麼？讓所有的迴響消失，又有什麼好處！');
+      await say('灰燼的薩倫', '三十年前，白帆港的燈塔守是我爸爸。暴風雨那晚，他為了點燈死在燈塔上。\n三艘船都回來了。可是重建燈塔的時候，牌子上只刻了出錢的商人。', 'cultist');
       await say('灰燼的薩倫', '你不懂。被遺忘的人，有多寂寞。\n——不過，先打贏我再說吧！', 'cultist');
       const r = await battle(['saren'], { bg: 'sky', noFlee: true });
       if (r !== 'win') return;
       flag('saren2_done');
       await say('灰燼的薩倫', '……去吧。最上面，「無聲者」歐勒斯大人在等你們。\n聽聽他的故事。他……其實也是一位英雄。', 'cultist');
+      await say('艾倫', '薩倫。你爸爸的名字，是什麼？');
+      await say('灰燼的薩倫', '…………薩爾。燈塔守，薩爾。', 'cultist');
       G.field.removeNpc('saren');
       G.field.locked = false;
     },
@@ -474,9 +486,9 @@ export function makeStory(G) {
     async azur_garden() { return say('老園丁', '這座庭園的花，是水守一族一代一代種下的。\n種花的人會老去，但花會一直開下去。', 'oldwoman'); },
     async palace_elder() { return say('水守長老', F().serene_done ? '瑟琳那孩子……其實一直很努力。是我們沒有好好看著她。' : '沉沒神殿裡供奉著水神的迴響。拜託你們，守住它。', 'noble'); },
     async palace_guard() { return say('水守衛兵', '尼歐大人小時候是個愛哭鬼喔。……這是秘密。', 'watchman'); },
-    async inn_port_keeper() { await ui.inn(INN_PRICE.port); },
-    async inn_anvil_keeper() { await ui.inn(INN_PRICE.anvil); },
-    async inn_azur_keeper() { await ui.inn(INN_PRICE.azurelle); },
+    async inn_port_keeper() { if (await ui.inn(INN_PRICE.port)) await side.night(); },
+    async inn_anvil_keeper() { if (await ui.inn(INN_PRICE.anvil)) await side.night(); },
+    async inn_azur_keeper() { if (await ui.inn(INN_PRICE.azurelle)) await side.night(); },
   };
 
   // ---------------------------------------------------------------- quest boards
@@ -591,5 +603,10 @@ export function makeStory(G) {
     return null;
   }
 
-  return { EV, TALK, SPOT_EVENTS, board, bubble, sanctum, objectiveText: () => objectiveText(G), QUESTS };
+  Object.assign(TALK, side.wrap({ ...TALK }), side.TALK);
+  Object.assign(SPOT_EVENTS, side.spotWrap({ ...SPOT_EVENTS }));
+  Object.assign(EV, side.EV);
+  const bubbleAll = (def) => side.bubble(def) || bubble(def);
+  const objective = () => { const o = objectiveText(G), h = side.sideHint(); return h && F().cleared ? o + '　／　' + h : o || h; };
+  return { EV, TALK, SPOT_EVENTS, SIGNS: side.SIGNS, board, bubble: bubbleAll, sanctum, objectiveText: objective, QUESTS };
 }

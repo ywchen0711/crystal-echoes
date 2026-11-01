@@ -1,8 +1,8 @@
 // Turns a map definition (ASCII grid + marks) into a lit 3D diorama.
-import { easeBack } from './voxel.js?v=14';
+import { easeBack } from './voxel.js?v=15';
 import * as THREE from '../lib/three.module.min.js';
-import { tileTex, propPx, propCanvas, texFrom, Px, ramp, shade, rnd, reseed, personFrame } from './pixel.js?v=14';
-import { Sprite, waterMaterial, blobShadow, spriteMaterial, depthMat } from './render.js?v=14';
+import { tileTex, propPx, propCanvas, texFrom, Px, ramp, shade, rnd, reseed, personFrame } from './pixel.js?v=15';
+import { Sprite, waterMaterial, blobShadow, spriteMaterial, depthMat } from './render.js?v=15';
 
 const LV = 0.5; // world height of one level
 // ground tile kinds by grid char
@@ -272,7 +272,7 @@ export function buildMap(scene, map, theme) {
         for (let i = 0; i < Math.ceil(m.w || 1.6); i++) { const cc = map.at(c.i + i, c.j); if (cc) cc.block = true; }
         break;
       }
-      case 'sign': { addSprite(propPx('sign'), cx, cz, y, 1); c.block = true; interact.push({ c, text: m.text, kind: 'sign' }); break; }
+      case 'sign': { addSprite(propPx(m.look || 'sign'), cx, cz, y, 1); c.block = true; interact.push({ c, text: m.text, kind: 'sign', id: m.id }); break; }
       case 'board': {
         const g = new THREE.Group();
         const post = std(tileTex('wood', '#6a4428'));
@@ -302,7 +302,7 @@ export function buildMap(scene, map, theme) {
         const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.2), std(tileTex('temple', '#c8c4b8'))); base.position.set(cx, y + 0.35, cz); base.castShadow = base.receiveShadow = true; root.add(base);
         const fig = { skin: '#c8c4b8', hair: '#a8a49a', hairStyle: m.hair || 'long', top: '#b8b4aa', legs: '#a8a49a', boots: '#989488', cape: '#b0aca0', weapon: m.weapon || 'sword', shield: m.shield };
         addSprite(personFrame(fig, 'down'), cx, cz, y + 0.7, 1.6);
-        c.block = true; interact.push({ c, kind: 'sign', text: m.text }); break;
+        c.block = true; interact.push({ c, kind: 'sign', text: m.text, id: m.id }); break;
       }
       case 'crystal': {
         // save crystal: a glowing octahedron with a ring of motes

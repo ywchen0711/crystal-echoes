@@ -1,15 +1,15 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
-import { balanceFor } from './balance.js?v=17';
+import { balanceFor } from './balance.js?v=18';
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=17';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=17';
-import { VoxelSprite } from './voxel.js?v=17';
-import { personModel, renderPortrait } from './paperdoll.js?v=17';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=17';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=17';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=17';
-import { lookOf } from './field.js?v=17';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=17';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=18';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=18';
+import { VoxelSprite } from './voxel.js?v=18';
+import { personModel, renderPortrait } from './paperdoll.js?v=18';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=18';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=18';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=18';
+import { lookOf } from './field.js?v=18';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=18';
 
 const ENEMY_DMG = 1.55;
 // what the story's bosses say when they drop below half
@@ -1255,9 +1255,9 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=17');
+    const { gainExp, gainBond } = await import('./party.js?v=18');
     const ups = gainExp(this.S, exp);
-    const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
+    const bond = gainBond(this.S, 4 + 3 * E.length + 36 * E.filter(e => e.boss).length); // per fight, not per enemy level: bond 5 takes ~55 battles anywhere
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);
     const learned = gainAP(this.S, ap);
     if (this.S.meal?.n > 0) { this.S.meal.n--; if (!this.S.meal.n) this.S.meal = null; }

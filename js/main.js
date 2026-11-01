@@ -1,19 +1,19 @@
 // Crystal Echoes: wires the renderer, field, battles, menus, story and saving together.
 import * as THREE from '../lib/three.module.min.js';
-import { createRenderer, createPost } from './render.js?v=17';
-import { Field, setHeroLook } from './field.js?v=17';
-import { setDepth, setPaper, setPaperCam } from './voxel.js?v=17';
-import { Battle } from './battle.js?v=17';
-import { UI, fmtTime } from './ui.js?v=17';
-import { Audio } from './audio.js?v=17';
-import { Input } from './input.js?v=17';
-import { makeStory, QUESTS } from './story.js?v=17';
-import { MAPS } from './maps.js?v=17';
-import { AutoMap } from './automap.js?v=17';
-import { Grind } from './grind.js?v=17';
-import { HEROES, ITEMS, ENEMIES } from './data.js?v=17';
-import { BESTIARY_NEW } from './content.js?v=17';
-import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=17';
+import { createRenderer, createPost } from './render.js?v=18';
+import { Field, setHeroLook } from './field.js?v=18';
+import { setDepth, setPaper, setPaperCam } from './voxel.js?v=18';
+import { Battle } from './battle.js?v=18';
+import { UI, fmtTime } from './ui.js?v=18';
+import { Audio } from './audio.js?v=18';
+import { Input } from './input.js?v=18';
+import { makeStory, QUESTS } from './story.js?v=18';
+import { MAPS } from './maps.js?v=18';
+import { AutoMap } from './automap.js?v=18';
+import { Grind } from './grind.js?v=18';
+import { HEROES, ITEMS, ENEMIES } from './data.js?v=18';
+import { BESTIARY_NEW } from './content.js?v=18';
+import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=18';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -383,7 +383,7 @@ class Game {
     await this.ui.fade(1, 500);
     if (v === 'cont' && this.loadSave()) { await this.ui.fade(0, 500); return; }
     // new game
-    this.S = newState();
+    this.S = newState(); this.S.pace = 2; // on the current progression scale (see migrate)
     addHero(this.S, 'aren', 1);
     this.applySettings();
     this.field.load('port', 17, 21, 'up');

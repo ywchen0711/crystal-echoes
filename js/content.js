@@ -1,9 +1,9 @@
 // Generated content: weapon types with their own battle rules, 1000+ pieces of equipment with effects,
 // 400 spells, 500 items and the weapon arts. Everything is built from tables so it stays consistent.
-import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=17';
-import { BESTIARY_NEW } from './monsters.js?v=17';
-import { H_TRAITS } from './horde.js?v=17';
-import { applyDepth } from './depth.js?v=17';
+import { ELEM, WPN, ICON, ELEM_COLOR, SKILLS, ITEMS, GEAR, ENEMIES, setGearResolver } from './data.js?v=18';
+import { BESTIARY_NEW } from './monsters.js?v=18';
+import { H_TRAITS } from './horde.js?v=18';
+import { applyDepth } from './depth.js?v=18';
 export { BESTIARY_NEW };
 
 export const ELS = ['fire', 'ice', 'thunder', 'water', 'wind', 'earth', 'light', 'dark'];
@@ -242,7 +242,10 @@ export const SPELLS = spellOrder.slice(0, 400);
 export { SCHOOL_N };
 
 // ================================================================ weapon arts (learned by weapon mastery)
-export const MASTERY_AT = [0, 8, 25, 60, 120];
+// about one point per action (two with a weapon in each hand), so about 2.5 a battle: the 2nd art after ~8 battles,
+// the 5th after ~130, about a third of the way through the story with one weapon
+export const MASTERY_AT = [0, 20, 70, 160, 320];
+export const MASTERY_OLD = [0, 8, 25, 60, 120]; // before saves were moved onto the slower pace
 const ARTS = {
   sword: [['斬擊', 0, { pow: 1.15 }, '劍屬性單體攻擊'], ['招架架式', 4, { type: 'buff', tgt: 'self', stance: 'parry', pow: 0 }, '本回合擋開所有物理攻擊並反擊'], ['十字斬', 8, { pow: 0.75, hits: 2 }, '兩連擊，適合破防'], ['劍氣', 10, { pow: 1.2, ranged: true, tgt: 'enemies' }, '劍氣打全體，飛行敵人也不減傷'], ['破鋒', 16, { pow: 1.6, dispel: true }, '攻擊並消除敵人的強化']],
   greatsword: [['橫掃', 0, { pow: 0.9, tgt: 'enemies' }, '大劍橫掃全體'], ['蓄力斬', 6, { type: 'special', tgt: 'self', charge: true }, '蓄力，下一次攻擊傷害×2.5'], ['破山', 12, { pow: 1.4, chip: 1 }, '不管弱點，削減1格破防值'], ['地裂斬', 16, { pow: 1.3, tgt: 'enemies', el: 'earth' }, '大劍＋土屬性全體攻擊'], ['捨身斬', 20, { pow: 3.0, recoil: 0.15 }, '超大傷害，自己受到15%最大HP反傷']],
@@ -281,7 +284,7 @@ const put = (id, g) => { GEAR[id] = g; gearList.push(id); };
 // spell teaching: spread every spell over the equipment that matches its tier
 const spellsAtTier = [1, 2, 3, 4, 5].map(t => SPELLS.filter(s => SKILLS[s].tier === t));
 const teachPick = (() => { const idx = [0, 0, 0, 0, 0]; return (itemTier, schools) => { const st = Math.min(5, Math.ceil((itemTier + 1) * 5 / 8)); const pool = spellsAtTier[st - 1].filter(s => !schools || schools.includes(SKILLS[s].school)); const list = pool.length ? pool : spellsAtTier[st - 1]; const s = list[idx[st - 1] % list.length]; idx[st - 1]++; return s; }; })();
-const apFor = (s) => 15 + SKILLS[s].tier * 15;
+const apFor = (s) => 20 + SKILLS[s].tier * 25; // 45..145 AP: 18–30 battles a spell, every taught piece learning at once
 function mergeFx(a, b) {
   const o = { ...a };
   for (const k in b) {

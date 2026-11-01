@@ -1,7 +1,7 @@
 // The save state and everything derived from it: stats, skills, echoes, levels, items.
-import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, EXP_NEXT, AP_CAP, BOND_EXP, STAR_COST, SUMMONS, ECHO_ORDER } from './data.js?v=17';
-import { APT, WTYPES, ARTS_BY_TYPE, MASTERY_AT, mergeFx } from './content.js?v=17';
-import { setBonus } from './depth.js?v=17';
+import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, EXP_NEXT, AP_CAP, BOND_EXP, STAR_COST, SUMMONS, ECHO_ORDER } from './data.js?v=18';
+import { APT, WTYPES, ARTS_BY_TYPE, MASTERY_AT, MASTERY_OLD, mergeFx } from './content.js?v=18';
+import { setBonus } from './depth.js?v=18';
 
 export const EQUIP_SLOTS = ['R', 'L', 'head', 'body', 'arms', 'waist', 'legs', 'feet', 'back', 'acc1', 'acc2'];
 export const SLOT_N = { R: '右手', L: '左手', head: '頭', body: '身體', arms: '手', waist: '腰', legs: '腿', feet: '腳', back: '背', acc1: '飾品1', acc2: '飾品2' };
@@ -99,7 +99,10 @@ export function migrate(S) {
     const h = S.heroes[id], e = h.equip;
     if ('w' in e || 'a' in e || 'x' in e) h.equip = { R: e.w || null, body: e.a || null, acc1: e.x || null, ...(START_KIT[id]?.L ? { L: START_KIT[id].L } : {}) };
     h.spells = h.spells || []; h.ap = h.ap || {}; h.mastery = h.mastery || {}; h.grow = h.grow || {};
+    // older saves counted mastery on a faster scale: keep every art already learned, the progress toward the next one in proportion
+    if (!S.pace) for (const t in h.mastery) { const p = h.mastery[t], O = MASTERY_OLD, N = MASTERY_AT, L = O.filter(m => p >= m).length; h.mastery[t] = L >= 5 ? N[4] + (p - O[4]) : Math.round(N[L - 1] + (p - O[L - 1]) / (O[L] - O[L - 1]) * (N[L] - N[L - 1])); }
   }
+  S.pace = 2;
 }
 export function apUsed(S, id) { return (S.heroes[id].on || []).reduce((a, p) => a + (PASSIVES[p]?.ap || 0), 0); }
 export function apCap(S, id) { return AP_CAP(S.heroes[id].lv); }

@@ -2,8 +2,8 @@
 // (split it with fire, wait out its phase, kill the guardian first, cure the poison that stops its leech...),
 // carries a signature move, and drops two things of its own: a battle item made from it and a rare charm
 // whose effect echoes how it fought.
-import { ENEMIES, SKILLS, ITEMS, GEAR } from './data.js?v=18';
-import { BESTIARY_NEW } from './monsters.js?v=18';
+import { ENEMIES, SKILLS, ITEMS, GEAR } from './data.js?v=19';
+import { BESTIARY_NEW } from './monsters.js?v=19';
 
 // ---------------------------------------------------------------- the mechanics (shown in the bestiary and the tactics book)
 export const H_TRAITS = {

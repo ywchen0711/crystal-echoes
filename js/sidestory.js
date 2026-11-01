@@ -1,7 +1,7 @@
 // The deeper half of the story: nights at the inn where the party talks about who they are, the side stories that grow
 // out of those talks (each one a few steps across the map), the last two of the six apostles, and fishing.
-import { ITEMS, GEAR, ENEMIES } from './data.js?v=18';
-import { addItem, itemName } from './party.js?v=18';
+import { ITEMS, GEAR, ENEMIES } from './data.js?v=19';
+import { addItem, itemName } from './party.js?v=19';
 
 // ---------------------------------------------------------------- new things to own
 Object.assign(ITEMS, {

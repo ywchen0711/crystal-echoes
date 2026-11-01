@@ -1,15 +1,16 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
-import { balanceFor } from './balance.js?v=18';
+import { balanceFor } from './balance.js?v=19';
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=18';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=18';
-import { VoxelSprite } from './voxel.js?v=18';
-import { personModel, renderPortrait } from './paperdoll.js?v=18';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=18';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=18';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=18';
-import { lookOf } from './field.js?v=18';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=18';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=19';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=19';
+import { VoxelSprite } from './voxel.js?v=19';
+import { personModel, renderPortrait } from './paperdoll.js?v=19';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=19';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=19';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=19';
+import { lookOf } from './field.js?v=19';
+import { SkillFx } from './skillfx.js?v=19';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=19';
 
 const ENEMY_DMG = 1.55;
 // what the story's bosses say when they drop below half
@@ -51,7 +52,8 @@ export class Battle {
     this.hemi = new THREE.HemisphereLight('#fff', '#888', 1); this.scene.add(this.hemi);
     this.pt = []; for (let i = 0; i < 3; i++) { const l = new THREE.PointLight('#ff9a40', 0, 10, 1.5); this.scene.add(l); this.pt.push(l); }
     this.flashLight = new THREE.PointLight('#fff', 0, 14, 1.2); this.flashLight.position.set(0, 3, 2); this.scene.add(this.flashLight);
-    this.fx = new Particles(this.scene, 900);
+    this.fx = new Particles(this.scene, 2000);
+    this.vfx = new SkillFx(this);
     this.dom = document.getElementById('battle');
     this.camShake = 0; this.camZoom = 0; this.t = 0; this.units = [];
   }
@@ -191,7 +193,7 @@ export class Battle {
     u.x = x; u.z = z; u.y = 0; u.ox = 0; u.oy = 0; u.flash = 0;
     if (u.side === 'party' && !u.alive) u.spr.setFrame(BPOSE.ko);
   }
-  clearUnits() { for (const u of this.units || []) { this.scene.remove(u.spr.mesh, u.shadow); u.spr.dispose(); } this.units = []; if (this.summonU) { this.scene.remove(this.summonU.spr.mesh); this.summonU = null; } }
+  clearUnits() { this.vfx?.clear(); for (const u of this.units || []) { this.scene.remove(u.spr.mesh, u.shadow); u.spr.dispose(); } this.units = []; if (this.summonU) { this.scene.remove(this.summonU.spr.mesh); this.summonU = null; } }
 
   get party() { return this.units.filter(u => u.side === 'party'); }
   get foes() { return this.units.filter(u => u.side === 'enemy' && u.alive); }
@@ -493,6 +495,7 @@ export class Battle {
     }
     if (o.landing) { let t = 0; const tx = targets[0].x + 0.8; u.ox = tx - u.x; while (t < 0.3) { t += await this.G.frame(); u.oy = 40 * (1 - t / 0.3); } u.oy = 0; if (S.tgt === 'enemies') targets = this.foes; }
     await this.actorAnim(u, S);
+    if (u.side === 'party' && (S.art || S.school)) await this.vfx.cast(u, S, targets); // every art and spell has its own wind-up
     // things that happen once, to the user
     if (S.stance) { u.stance = S.stance; this.pop(u, { parry: '招架架式', counter: '明鏡止水', cover: '掩護', wall: '鐵壁' }[S.stance], '#8ac8ff'); }
     if (S.amp) { u.amp = S.amp; this.pop(u, '魔力增幅', '#c8a0ff'); }
@@ -518,7 +521,7 @@ export class Battle {
         if (S.gravity && tgt.E?.metal) { this.pop(tgt, '無效', '#c8c8c8'); return; }
         if (S.gravity) { this.effect('dark', tgt, 'dark', u); await wait(180); const d = Math.max(1, Math.round(tgt.hp * S.gravity * (tgt.boss ? 0.3 : 1))); this.damage(tgt, d, {}); total += d; return; }
         if (S.osmose) { this.effect('dark', tgt, 'dark', u); await wait(150); const r = this.calc(u, tgt, S, tags, {}); const m = Math.min(tgt.mp ?? 0, Math.max(5, Math.round(r.dmg * 0.25))); if (tgt.side === 'enemy') { u.mp = Math.min(u.st.mp, u.mp + m); this.number(u, m, '#8ac8ff', {}); } else { tgt.mp = Math.max(0, tgt.mp - m); } return; }
-        if (S.delay) { (this.delayed = this.delayed || []).push({ u, t: tgt, sid }); this.effect('scan', tgt, el[0], u); this.pop(tgt, '設下時限', '#ffb04a'); return; }
+        if (S.delay) { (this.delayed = this.delayed || []).push({ u, t: tgt, sid }); this.effect('scan', tgt, el[0], u, S); this.pop(tgt, '設下時限', '#ffb04a'); return; }
         let pow = (S.pow || 1) * amp;
         if (S.mpBurst) { pow = 0.8 + u.mp / 30; u.mp = 0; }
         if (S.burst) { const n = Object.keys(tgt.status).filter(k => !['regen', 'haste', 'reflect', 'reraise'].includes(k)).length + Object.values(tgt.buffs).filter(b => b.v < 0).length; pow *= 1 + 0.6 * n; if (n) { this.pop(tgt, `引爆 ×${n}`, '#ff8a3a'); tgt.status = {}; for (const b in tgt.buffs) if (tgt.buffs[b].v < 0) delete tgt.buffs[b]; } }
@@ -542,7 +545,7 @@ export class Battle {
         if (S.mpGain) u.mp = Math.min(u.st.mp, u.mp + S.mpGain);
         if (S.gilToss) { }
       } else if (S.type === 'heal') {
-        this.effect(S.anim || 'heal', tgt, 'light', u); await wait(150);
+        this.effect(S.anim || 'heal', tgt, 'light', u, S); await wait(150);
         if (S.revive || S.tgt === 'dead') { if (!tgt.alive) { tgt.alive = true; tgt.hp = Math.max(1, Math.round(tgt.st.hp * Math.max(S.revive || 0.3, u.key === 'grace' ? 0.5 : 0))); tgt.spr.setFrame(BPOSE.idle); this.pop(tgt, '復活', '#fff4b0'); } }
         if (!tgt.alive) return;
         const hb = (u.on?.includes('p_healup') ? 1.25 : 1) * (1 + (u.fx?.healup || 0)) * (u.hands?.some(h => h.type === 'staff') ? 1.3 : 1);
@@ -559,7 +562,7 @@ export class Battle {
         if (S.sacrifice && tgt !== u) { this.heal(tgt, Math.round(this._sac / Math.max(1, this.allies.length - 1))); }
         if (S.buff) this.buff(tgt, S.buff);
       } else if (S.type === 'buff') {
-        this.effect(S.anim || 'buff', tgt, 'light', u); await wait(120);
+        this.effect(S.anim || 'buff', tgt, 'light', u, S); await wait(120);
         if (S.buff) this.buff(tgt, S.buff);
         if (S.regen) tgt.status.regen = S.regen;
         if (S.taunt) { tgt.taunt = S.taunt; this.pop(tgt, '挑釁', '#ffb04a'); }
@@ -570,7 +573,7 @@ export class Battle {
         if (S.enchantEl) { tgt.enchant = { el: S.enchantEl, t: 3 }; this.pop(tgt, ELEM[S.enchantEl] + '附魔', ELEM_COLOR[S.enchantEl]); }
         if (S.enchant) { const rod = u.hands?.find(h => h.type === 'rod'); const el = [].concat(rod?.fx?.el || [])[0] || 'fire'; tgt.enchant = { el, t: 3 }; this.pop(tgt, ELEM[el] + '附魔', ELEM_COLOR[el]); }
       } else if (S.type === 'debuff') {
-        this.effect(S.anim || 'dark', tgt, [].concat(S.el || 'dark')[0], u); await wait(150);
+        this.effect(S.anim || 'dark', tgt, [].concat(S.el || 'dark')[0], u, S); await wait(150);
         if (S.pow) { const els = S.el ? [].concat(S.el) : []; const rx = tgt.side === 'enemy' && u.side !== 'enemy' ? this.reaction(u, tgt, S, els) : null; const r = this.calc(u, tgt, { ...S, type: 'mag' }, els, { ...o, rx: rx?.mul }); if (!r.miss && !r.block && !r.absorb) { tgt.lastTags = els; tgt.lastBy = u; this.damage(tgt, r.dmg, { weak: r.weak }); if (rx) await this.afterReaction(u, tgt, S, els, rx); if ((r.weak || rx?.brk) && tgt.side === 'enemy') await this.breakHit(tgt, (r.weak ? 1 : 0) + (rx?.brk || 0)); } else if (r.absorb) { this.heal(tgt, r.dmg); this.pop(tgt, '吸收', '#8affb0'); } }
         if (S.status && tgt.alive) this.inflict(tgt, S.status, S.chance || 0.5);
         if (S.multiStatus && tgt.alive) for (const st of S.multiStatus) this.inflict(tgt, st, S.chance || 0.3, true);
@@ -580,15 +583,15 @@ export class Battle {
         if (S.addWeak && tgt.side === 'enemy') { tgt.extraWeak = tgt.extraWeak || {}; tgt.extraWeak[S.addWeak] = 3; tgt.revealed.add(S.addWeak); this.pop(tgt, `弱${ELEM[S.addWeak]}！`, ELEM_COLOR[S.addWeak]); }
         if (S.unresist) { tgt.noResist = 3; tgt.noArmor = 3; this.pop(tgt, '抗性消失', '#ffb04a'); }
       } else if (S.type === 'special') {
-        if (S.analyze) { delete tgt.status.hidden; for (const w of tgt.weak) tgt.revealed.add(w); this.remember(tgt); this.pop(tgt, '弱點看穿！', '#ffe04a'); this.G.audio.sfx('scan'); this.effect('scan', tgt, 'light', u); }
+        if (S.analyze) { delete tgt.status.hidden; for (const w of tgt.weak) tgt.revealed.add(w); this.remember(tgt); this.pop(tgt, '弱點看穿！', '#ffe04a'); this.G.audio.sfx('scan'); this.effect('scan', tgt, 'light', u, S); }
         if (S.steal) { this.effect('slash', tgt, 'dagger', u); this.steal(u, tgt); }
         if (S.charge) { u.charged = true; this.pop(u, '蓄力中…', '#ff6a6a'); this.effect('buff', u, 'fire', u); }
         if (S.stealGil) { const g = Math.min(this.S.gil, 20 + Math.floor(Math.random() * 40)); this.S.gil -= g; this.pop(tgt, `被偷了 ${g}G`, '#ffe04a'); }
         if (S.flee) { this.pop(u, '逃走了', '#fff'); u.alive = false; u.fled = true; this.fadeOut(u); }
-        if (S.chip && tgt.side === 'enemy') { this.effect('laser', tgt, 'light', u); await this.breakHit(tgt, S.chip); }
+        if (S.chip && tgt.side === 'enemy') { this.effect('laser', tgt, 'light', u, S); await this.breakHit(tgt, S.chip); }
         if (S.mpSuck) { const m = Math.round((tgt.mp || 0) * S.mpSuck); tgt.mp = Math.max(0, (tgt.mp || 0) - m); this.pop(tgt, `MP -${m}`, '#8ac8ff'); }
         if (S.quick) { this.pop(tgt, '迅捷！', '#ffe04a'); this.queue.unshift(tgt); }
-        if (S.gilToss) { const cost = Math.min(this.S.gil, (u.lv || 10) * 50); this.S.gil -= cost; this.effect('light', tgt, 'light', u); this.damage(tgt, Math.round(cost * 0.8 / Math.max(1, targets.length)) + 1, {}); }
+        if (S.gilToss) { const cost = Math.min(this.S.gil, (u.lv || 10) * 50); this.S.gil -= cost; this.effect('light', tgt, 'light', u, S); this.damage(tgt, Math.round(cost * 0.8 / Math.max(1, targets.length)) + 1, {}); }
         await wait(300);
       }
       this.ui.refresh();
@@ -644,7 +647,7 @@ export class Battle {
       if (pool.length) { tgt = pool[Math.random() * pool.length | 0]; ctx = { ...ctx, reflected: true }; }
     }
     const elTag = tags.find(t => ELEM[t]);
-    this.effect(S.anim || 'slash', tgt, elTag || tags[0] || 'sword', u);
+    this.effect(S.anim || 'slash', tgt, elTag || tags[0] || 'sword', u, S);
     await wait(ctx.fast ? 100 : 170);
     if (!tgt.alive) return 0;
     const rx = tgt.side === 'enemy' && u.side !== 'enemy' ? this.reaction(u, tgt, S, tags) : null;
@@ -1134,7 +1137,8 @@ export class Battle {
     u.ox = 0;
     if (u.side === 'party' && u.alive) u.spr.setFrame(BPOSE.idle);
   }
-  effect(anim, t, el, u) {
+  effect(anim, t, el, u, S) {
+    if (S && (S.art || S.school) && u?.side === 'party') return this.vfx.hit(S, t, el, u); // arts and spells: see skillfx.js
     const x = t.x + (t.ox || 0), z = t.z, y = t.side === 'enemy' ? t.spr.h * 0.45 : 1.2;
     const col = ELEM_COLOR[el] || '#ffffff';
     const P = this.fx;
@@ -1226,7 +1230,7 @@ export class Battle {
     }
     this.flashLight.intensity *= Math.exp(-dt * 8);
     const gu = this.G.post.grade.uniforms; gu.flash.value *= Math.exp(-dt * 6);
-    this.fx.update(dt);
+    this.fx.update(dt); this.vfx.update(dt);
     if (this.ui) this.ui.tick();
   }
 
@@ -1255,7 +1259,7 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=18');
+    const { gainExp, gainBond } = await import('./party.js?v=19');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, 4 + 3 * E.length + 36 * E.filter(e => e.boss).length); // per fight, not per enemy level: bond 5 takes ~55 battles anywhere
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);

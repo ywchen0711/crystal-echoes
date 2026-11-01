@@ -1,12 +1,12 @@
 // Walking around: maps, the leader sprite, NPCs, chests, doors, encounters, mounts and the camera.
 import * as THREE from '../lib/three.module.min.js';
-import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js?v=18';
-import { parseMap, buildMap, groundAt } from './mapbuild.js?v=18';
-import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js?v=18';
-import { isPaper } from './voxel.js?v=18';
-import { personModel } from './paperdoll.js?v=18';
-import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js?v=18';
-import { HEROES, ECHOES } from './data.js?v=18';
+import { MAPS, THEMES, LOOKS, arenaMap } from './maps.js?v=19';
+import { parseMap, buildMap, groundAt } from './mapbuild.js?v=19';
+import { Sprite, blobShadow, skyDome, Particles, Motes } from './render.js?v=19';
+import { isPaper } from './voxel.js?v=19';
+import { personModel } from './paperdoll.js?v=19';
+import { personSheet, Px, ramp, texFrom, propPx } from './pixel.js?v=19';
+import { HEROES, ECHOES } from './data.js?v=19';
 
 export const LIGHTS = {
   day: { sun: ['#fff0d8', 2.7, [0.5, 1, 0.7]], hemi: ['#c4dcff', '#8a7a5a', 1.0], exp: 1.0 },

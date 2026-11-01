@@ -1,19 +1,19 @@
 // Crystal Echoes: wires the renderer, field, battles, menus, story and saving together.
 import * as THREE from '../lib/three.module.min.js';
-import { createRenderer, createPost } from './render.js?v=16';
-import { Field, setHeroLook } from './field.js?v=16';
-import { setDepth, setPaper, setPaperCam } from './voxel.js?v=16';
-import { Battle } from './battle.js?v=16';
-import { UI, fmtTime } from './ui.js?v=16';
-import { Audio } from './audio.js?v=16';
-import { Input } from './input.js?v=16';
-import { makeStory, QUESTS } from './story.js?v=16';
-import { MAPS } from './maps.js?v=16';
-import { AutoMap } from './automap.js?v=16';
-import { Grind } from './grind.js?v=16';
-import { HEROES, ITEMS, ENEMIES } from './data.js?v=16';
-import { BESTIARY_NEW } from './content.js?v=16';
-import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=16';
+import { createRenderer, createPost } from './render.js?v=17';
+import { Field, setHeroLook } from './field.js?v=17';
+import { setDepth, setPaper, setPaperCam } from './voxel.js?v=17';
+import { Battle } from './battle.js?v=17';
+import { UI, fmtTime } from './ui.js?v=17';
+import { Audio } from './audio.js?v=17';
+import { Input } from './input.js?v=17';
+import { makeStory, QUESTS } from './story.js?v=17';
+import { MAPS } from './maps.js?v=17';
+import { AutoMap } from './automap.js?v=17';
+import { Grind } from './grind.js?v=17';
+import { HEROES, ITEMS, ENEMIES } from './data.js?v=17';
+import { BESTIARY_NEW } from './content.js?v=17';
+import { newState, addHero, addItem, itemName, healAll, heroStats, migrate, gearFx, paperLook } from './party.js?v=17';
 
 const SAVE_KEY = 'crystal-echoes-save-v1';
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -301,7 +301,11 @@ class Game {
     document.body.classList.add('inbattle');
     let res;
     for (;;) {
-      res = await this.battle.run(opts);
+      try { res = await this.battle.run(opts); } catch (e) { // never leave the player stuck on a black screen
+        console.error(e); this.battle.active = false;
+        try { this.battle.ui?.hide(); this.battle.clearUnits(); } catch (e2) { console.error(e2); }
+        res = opts.random ? 'flee' : 'win';
+      }
       if (res !== 'lose') break;
       const choice = await this.gameOver(!!opts.random);
       if (choice === 'retry') { const s = JSON.parse(snapshot); Object.assign(this.S, s); continue; }

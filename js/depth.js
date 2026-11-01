@@ -1,6 +1,6 @@
 // Strategic depth: 24 echoes with keystones, echo pairs, elemental states and reactions,
 // monster traits that each demand a different answer, and gear sets worth hunting for.
-import { ECHOES, SKILLS, PASSIVES, ECHO_ORDER, ENEMIES, GEAR, ELEM } from './data.js?v=16';
+import { ECHOES, SKILLS, PASSIVES, ECHO_ORDER, ENEMIES, GEAR, ELEM } from './data.js?v=17';
 
 // ================================================================ elemental states and reactions
 // a hit leaves its element on the target; the next element can react with it

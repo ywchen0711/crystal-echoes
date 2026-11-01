@@ -1,7 +1,7 @@
 // Voxel people and monsters: the same recipes as the pixel sprites, built as real 3D models
 // out of small cubes so they have depth, turn smoothly and swing their arms and legs.
 import * as THREE from '../lib/three.module.min.js';
-import { shade, mix } from './pixel.js?v=16';
+import { shade, mix } from './pixel.js?v=17';
 const CHAR_LAYER = 2;
 const toLayer = (root) => root.traverse((o) => o.layers.set(CHAR_LAYER));
 

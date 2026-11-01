@@ -1,15 +1,15 @@
 // Turn-based battles: a timeline, break shields, Full Break -> Extra Phase -> Resonance, summons and limits.
-import { balanceFor } from './balance.js?v=16';
+import { balanceFor } from './balance.js?v=17';
 import * as THREE from '../lib/three.module.min.js';
-import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=16';
-import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=16';
-import { VoxelSprite } from './voxel.js?v=16';
-import { personModel, renderPortrait } from './paperdoll.js?v=16';
-import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=16';
-import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=16';
-import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=16';
-import { lookOf } from './field.js?v=16';
-import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=16';
+import { Sprite, Particles, skyDome, blobShadow } from './render.js?v=17';
+import { battleSheet, monsterPx, propPx, propCanvas, tileTex, texFrom, BPOSE } from './pixel.js?v=17';
+import { VoxelSprite } from './voxel.js?v=17';
+import { personModel, renderPortrait } from './paperdoll.js?v=17';
+import { HEROES, ECHOES, SKILLS, ENEMIES, ITEMS, SUMMONS, ELEM, WPN, ICON, ELEM_COLOR, PASSIVES } from './data.js?v=17';
+import { heroStats, skillsOf, weaponType, addItem, itemName, hands, gearFx, artsOf, spellsOf, shieldOf, gainAP, addEcho } from './party.js?v=17';
+import { WTYPES, TRAIT_N, STATUS_N, STATUS_S, ELS, SCHOOL_N, ITEM_CATS, MASTERY_AT, ARTS_BY_TYPE, randomGear } from './content.js?v=17';
+import { lookOf } from './field.js?v=17';
+import { STATE_OF, pairsOf, NEW_ECHOES, huntMatch } from './depth.js?v=17';
 
 const ENEMY_DMG = 1.55;
 // what the story's bosses say when they drop below half
@@ -88,7 +88,7 @@ export class Battle {
   }
 
   makeUnits(troop, opts) {
-    this.units = []; this._awed = false; this.splits = 0;
+    this.units = []; this._awed = false; this._aweBy = null; this.splits = 0;
     const P = this.S.party;
     const slots = [[2.9, -1.9], [3.9, -0.65], [4.9, 0.6], [5.9, 1.85]];
     P.forEach((id, i) => {
@@ -144,9 +144,10 @@ export class Battle {
     u.aura = E.aura; u.absorb = E.absorb || [];
     this.addSprite(u, pos[0], pos[1]);
     this.units.push(u);
-    if (u.traits.has('intimidate') && !this._awed) { this._awed = true; for (const a of this.party) if (a.alive) this.buff(a, { atk: -1 }, true); this.pop(u, '威壓！全隊攻擊↓', '#ff8a8a', true); }
+    if (u.traits.has('intimidate') && !this._awed) { this._awed = true; if (this.active) this.awe(u); else this._aweBy = u; } // at the start, once the battle UI is up
     return u;
   }
+  awe(u) { for (const a of this.party) if (a.alive) this.buff(a, { atk: -1 }, true); this.pop(u, '威壓！全隊攻擊↓', '#ff8a8a', true); }
   // a summoner calls a weaker member of its family onto a free spot
   async spawnMinion(s) {
     const spots = [[-2.2, -2.0], [-5.0, -1.3], [-2.6, 0.9], [-5.4, 1.9], [-3.8, 0]];
@@ -205,6 +206,7 @@ export class Battle {
     this.auto = !!this.S.settings.auto;
     this.ui = new BattleUI(this);
     this.ui.show();
+    if (this._aweBy) { this.awe(this._aweBy); this._aweBy = null; }
     const area = this.G.field?.def?.bgm || this.G.field?.theme?.bgm; // caves, ruins and the end of the world get the darker battle theme
     this.G.audio.music(opts.music || (this.units.some(u => u.boss) ? 'boss' : ['dungeon', 'dungeon2', 'mine', 'last', 'night'].includes(area) ? 'battle2' : 'battle'));
     this.active = true;
@@ -880,7 +882,7 @@ export class Battle {
       u.buffs[k] = { v, t: 3 + (o[k] > 0 && this.curActor?.key === 'encore' ? 2 : 0) };
       if (!quiet) this.pop(u, ({ atk: '攻擊', def: '防禦', mag: '魔力', spr: '精神', spd: '速度' })[k] + (o[k] > 0 ? '↑' : '↓'), o[k] > 0 ? '#8affb0' : '#ff8a8a');
     }
-    this.ui.refresh();
+    this.ui?.refresh(); // monsters with intimidate buff before the battle UI exists
   }
   inflict(t, st, chance, quiet) {
     if (!t.alive) return;
@@ -1253,7 +1255,7 @@ export class Battle {
     }
     for (const eid of woke) addEcho(this.S, eid);
     this.S.gil += gil;
-    const { gainExp, gainBond } = await import('./party.js?v=16');
+    const { gainExp, gainBond } = await import('./party.js?v=17');
     const ups = gainExp(this.S, exp);
     const bond = gainBond(this.S, Math.max(4, Math.round(E.reduce((s, e) => s + e.lv, 0) * (E.some(e => e.boss) ? 3 : 1.2))));
     const ap = E.reduce((s, e) => s + (e.ap || 1), 0);

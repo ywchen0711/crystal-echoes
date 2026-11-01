@@ -1,7 +1,7 @@
 // The save state and everything derived from it: stats, skills, echoes, levels, items.
-import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, EXP_NEXT, AP_CAP, BOND_EXP, STAR_COST, SUMMONS, ECHO_ORDER } from './data.js?v=16';
-import { APT, WTYPES, ARTS_BY_TYPE, MASTERY_AT, mergeFx } from './content.js?v=16';
-import { setBonus } from './depth.js?v=16';
+import { HEROES, ECHOES, PASSIVES, SKILLS, ITEMS, GEAR, EXP_NEXT, AP_CAP, BOND_EXP, STAR_COST, SUMMONS, ECHO_ORDER } from './data.js?v=17';
+import { APT, WTYPES, ARTS_BY_TYPE, MASTERY_AT, mergeFx } from './content.js?v=17';
+import { setBonus } from './depth.js?v=17';
 
 export const EQUIP_SLOTS = ['R', 'L', 'head', 'body', 'arms', 'waist', 'legs', 'feet', 'back', 'acc1', 'acc2'];
 export const SLOT_N = { R: '右手', L: '左手', head: '頭', body: '身體', arms: '手', waist: '腰', legs: '腿', feet: '腳', back: '背', acc1: '飾品1', acc2: '飾品2' };

@@ -3,8 +3,8 @@
 // has two drawings, three-quarter views from the front and from the back; turning left or right flips the card over.
 // The parts of one look are packed into one texture; the joints take the same poses as the voxel people.
 import * as THREE from '../lib/three.module.min.js';
-import { shade, mix } from './pixel.js?v=16';
-import { VoxelPerson, isPaper, easeBack, tintWeapon, weaponGrid, WPN_TILT, SKINS, POSES, JOINTS, DIR_ANGLE, camYaw, VS, POP_T, FLIP_T, BWIN, toLayer, renderVoxelPortrait } from './voxel.js?v=16';
+import { shade, mix } from './pixel.js?v=17';
+import { VoxelPerson, isPaper, easeBack, tintWeapon, weaponGrid, WPN_TILT, SKINS, POSES, JOINTS, DIR_ANGLE, camYaw, VS, POP_T, FLIP_T, BWIN, toLayer, renderVoxelPortrait } from './voxel.js?v=17';
 
 const PPU = 8;                        // texture pixels per body unit (a person is about 46 units tall)
 const INK = '#2b1d2c', LW = 0.36;     // outline colour and half its width

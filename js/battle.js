@@ -1418,8 +1418,9 @@ class BattleUI {
       }
     };
     for (;;) {
+      if (b.auto) return { kind: 'auto' }; // auto was switched on while a sub-menu was open: every menu unwinds back here
       const i = await this.list(opts.map(o => ({ label: o.label, sub: o.sub, disabled: o.disabled, cls: o.cls })), { title: u.name + (extra ? '・追加' : ''), cancel: false, cmd: true });
-      if (i === 'auto') return { kind: 'auto' };
+      if (i === 'auto' || i < 0 || b.auto) return { kind: 'auto' };
       const o = opts[i];
       if (o.k === 'attack') { const t = await this.pickTarget(u, ['whip', 'boomerang'].includes(u.wpn) ? { tgt: 'enemies' } : SKILLS.attack); if (t) return { kind: 'skill', skill: 'attack', targets: t }; continue; }
       if (o.k === 'skill' || o.k === 'echo' || o.k === 'arts') { const a = await pickSkill(o.k === 'skill' ? sk.own : o.k === 'echo' ? sk.echo : arts, o.label); if (a) return a; continue; }
@@ -1462,6 +1463,7 @@ class BattleUI {
   // a vertical list menu for battle. returns index, -1 for cancel, or 'auto'
   list(items, o = {}) {
     const G = this.b.G;
+    if (this.b.auto && !o.cmd) return Promise.resolve(-1);
     return new Promise((res) => {
       let sel = items.findIndex(i => !i.disabled); if (sel < 0) sel = 0;
       const box = this.cmd;
@@ -1478,13 +1480,14 @@ class BattleUI {
         if (k === 'ok' && !items[sel].disabled) done(sel);
         if (k === 'cancel' && o.cancel) done(-1);
       });
-      this.cancelCmd = (v) => { off(); box.classList.remove('on'); res(v); };
+      this.cancelCmd = () => { off(); box.classList.remove('on'); this.cancelCmd = null; res(-1); }; // the auto button: close as a cancel
       box.classList.add('on'); draw();
     });
   }
   // choose targets with the cursor (or tap). returns array or null
   pickTarget(u, S) {
     const b = this.b, G = b.G;
+    if (b.auto) return Promise.resolve(null);
     let pool, multi = false;
     if (S.tgt === 'enemy') pool = b.foes;
     else if (S.tgt === 'enemies' || S.tgt === 'random') { pool = b.foes; multi = true; }
@@ -1498,7 +1501,8 @@ class BattleUI {
       let i = 0;
       if (!this.cursor) { this.cursor = document.createElement('div'); this.cursor.className = 'b-cursor'; this.cursor.textContent = '▼'; this.root.appendChild(this.cursor); }
       const set = () => { this.targetSet = multi ? pool : [pool[i]]; this.cursorU = multi ? null : pool[i]; this.cursor.style.display = multi ? 'none' : 'block'; b.msg(multi ? (S.tgt === 'allies' ? '我方全體' : '敵方全體') : pool[i].name + (pool[i].side === 'enemy' ? `  HP ${Math.round(pool[i].hp / pool[i].st.hp * 100)}%` : `  HP ${pool[i].hp}/${pool[i].st.hp}`)); };
-      const done = (v) => { off(); this.targetSet = null; this.cursorU = null; this.cursor.style.display = 'none'; this.pickHook = null; this.pt.onclick = null; G.audio.sfx(v ? 'ok' : 'cancel'); res(v); };
+      const done = (v) => { off(); this.targetSet = null; this.cursorU = null; this.cursor.style.display = 'none'; this.pickHook = null; this.pt.onclick = null; this.cancelCmd = null; G.audio.sfx(v ? 'ok' : 'cancel'); res(v); };
+      this.cancelCmd = () => done(null);
       const off = G.input.on((k) => {
         if (!multi && (k === 'up' || k === 'left')) { i = (i + pool.length - 1) % pool.length; G.audio.sfx('move'); set(); }
         if (!multi && (k === 'down' || k === 'right')) { i = (i + 1) % pool.length; G.audio.sfx('move'); set(); }
